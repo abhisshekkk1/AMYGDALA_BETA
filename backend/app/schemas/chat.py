@@ -1,0 +1,39 @@
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel
+
+class ChatMessageCreate(BaseModel):
+    session_id: Optional[int] = None
+    content: str
+    document_ids: Optional[List[int]] = []
+    tone: Optional[str] = "academic"  # academic, simplified, bullet_points
+
+class CitationItem(BaseModel):
+    chunk_id: Optional[int] = None
+    document_id: int
+    document_title: str
+    page_number: int
+    heading: Optional[str] = None
+    excerpt: str
+    relevance_score: Optional[float] = None
+
+class ChatMessageOut(BaseModel):
+    id: int
+    role: str
+    content: str
+    citations: List[CitationItem] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatSessionOut(BaseModel):
+    id: int
+    title: str
+    selected_document_ids: List[int] = []
+    created_at: datetime
+    updated_at: datetime
+    messages: List[ChatMessageOut] = []
+
+    class Config:
+        from_attributes = True

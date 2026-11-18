@@ -1,0 +1,566 @@
+"use client";
+
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { api } from "@/lib/api";
+import { Document } from "@/types";
+import {
+  GraduationCap,
+  Sparkles,
+  FileCheck2,
+  FileText,
+  Printer,
+  CheckCircle2,
+  HelpCircle,
+  Loader2,
+  BookOpen,
+  ArrowRight
+} from "lucide-react";
+
+export default function ExamPrepPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-gray-500">Loading Exam Engine...</div>}>
+      <ExamPrepContent />
+    </Suspense>
+  );
+}
+
+function ExamPrepContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const initialDocId = searchParams.get("docId") ? parseInt(searchParams.get("docId")!) : undefined;
+
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [selectedDocId, setSelectedDocId] = useState<number | undefined>(initialDocId);
+  const [activeTab, setActiveTab] = useState<"mcq" | "short_long" | "paper">("mcq");
+
+  // MCQ Form
+  const [mcqCount, setMcqCount] = useState(5);
+  const [mcqDifficulty, setMcqDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [mcqTopic, setMcqTopic] = useState("");
+  const [generatedMCQs, setGeneratedMCQs] = useState<any[]>([]);
+
+  // Marks-based Form (2, 3, 5, 10, 15 marks)
+  const [marksValue, setMarksValue] = useState<number>(5);
+  const [marksTopic, setMarksTopic] = useState("");
+  const [generatedMarksQuestion, setGeneratedMarksQuestion] = useState<any | null>(null);
+
+  // Question Paper Generator Form
+  const [paperTitle, setPaperTitle] = useState("Midterm Examination");
+  const [paperSubject, setPaperSubject] = useState("Computer Science & Engineering");
+  const [paperMarks, setPaperMarks] = useState(50);
+  const [paperDuration, setPaperDuration] = useState(60);
+  const [generatedPaper, setGeneratedPaper] = useState<any | null>(null);
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getDocuments().then((docs) => {
+      setDocuments(docs);
+      if (!selectedDocId && docs.length > 0) {
+        setSelectedDocId(docs[0].id);
+      }
+    });
+  }, []);
+
+  const handleGenerateMCQs = async () => {
+    if (!selectedDocId) return;
+    setIsGenerating(true);
+    setStatusMessage("Synthesizing curriculum MCQs with exact source page citations...");
+    try {
+      const res = await api.generateMCQs([selectedDocId], mcqCount, mcqDifficulty, mcqTopic || undefined);
+      setGeneratedMCQs(res.questions || []);
+    } catch (err: any) {
+      alert("MCQ generation failed: " + err.message);
+    } finally {
+      setIsGenerating(false);
+      setStatusMessage(null);
+    }
+  };
+
+  const handleLaunchTest = async () => {
+    if (generatedMCQs.length === 0) return;
+    setIsGenerating(true);
+    try {
+      const test = await api.createPracticeTest(
+        `Diagnostic Assessment: ${mcqTopic || "Curriculum Evaluation"}`,
+        generatedMCQs,
+        selectedDocId,
+        15
+      );
+      router.push(`/tests?testId=${test.id}`);
+    } catch (err: any) {
+      alert("Failed to create test session: " + err.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateMarksQuestion = async () => {
+    if (!selectedDocId) return;
+    setIsGenerating(true);
+    setStatusMessage(`Drafting ${marksValue}-mark examination question with rubric adaptation...`);
+    try {
+      const res = await api.generateMarksQuestion([selectedDocId], marksValue, marksTopic || undefined);
+      setGeneratedMarksQuestion(res);
+    } catch (err: any) {
+      alert("Question generation failed: " + err.message);
+    } finally {
+      setIsGenerating(false);
+      setStatusMessage(null);
+    }
+  };
+
+  const handleGeneratePaper = async () => {
+    if (!selectedDocId) return;
+    setIsGenerating(true);
+    setStatusMessage("Structuring multi-section examination paper & marking scheme...");
+    try {
+      const res = await api.generateQuestionPaper([selectedDocId], paperTitle, paperSubject, paperMarks, paperDuration);
+      setGeneratedPaper(res);
+    } catch (err: any) {
+      alert("Paper generation failed: " + err.message);
+    } finally {
+      setIsGenerating(false);
+      setStatusMessage(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white font-mono">
+            AI Exam Preparation Engine
+          </h1>
+          <p className="text-xs text-gray-400 mt-1">
+            Generate curriculum-grounded Multiple Choice Questions, marks-adapted short/long answers, and complete exam papers.
+          </p>
+        </div>
+
+        {/* Document Context Selector */}
+        <div className="flex items-center gap-2 bg-[#111827] border border-[#1f2937] px-3 py-1.5 rounded-xl">
+          <BookOpen className="h-4 w-4 text-indigo-400 shrink-0" />
+          <select
+            value={selectedDocId || ""}
+            onChange={(e) => setSelectedDocId(parseInt(e.target.value))}
+            className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer"
+          >
+            {documents.map((d) => (
+              <option key={d.id} value={d.id} className="bg-[#111827] text-white">
+                {d.title} ({d.page_count}p)
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#1f2937] pb-2">
+        <button
+          onClick={() => setActiveTab("mcq")}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "mcq"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+          }`}
+        >
+          A. Multiple Choice (MCQs)
+        </button>
+        <button
+          onClick={() => setActiveTab("short_long")}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "short_long"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+          }`}
+        >
+          B & C. Marks-Based Questions (2, 5, 10, 15 Marks)
+        </button>
+        <button
+          onClick={() => setActiveTab("paper")}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+            activeTab === "paper"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+          }`}
+        >
+          D. Full Examination Paper Generator
+        </button>
+      </div>
+
+      {/* TAB A: MCQs */}
+      {activeTab === "mcq" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="p-6 rounded-2xl bg-[#111827] border border-[#1f2937] space-y-4">
+            <h2 className="text-sm font-semibold text-white">MCQ Generation Parameters</h2>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Topic or Chapter Focus (Optional)</label>
+              <input
+                type="text"
+                value={mcqTopic}
+                onChange={(e) => setMcqTopic(e.target.value)}
+                placeholder="e.g. CAP theorem, consensus, replication"
+                className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Number of MCQs</label>
+                <select
+                  value={mcqCount}
+                  onChange={(e) => setMcqCount(parseInt(e.target.value))}
+                  className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value={3}>3 Questions</option>
+                  <option value={5}>5 Questions</option>
+                  <option value={10}>10 Questions</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Difficulty</label>
+                <select
+                  value={mcqDifficulty}
+                  onChange={(e) => setMcqDifficulty(e.target.value as any)}
+                  className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 capitalize"
+                >
+                  <option value="easy">Easy (Definitions)</option>
+                  <option value="medium">Medium (Analytical)</option>
+                  <option value="hard">Hard (Complex Scenarios)</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={handleGenerateMCQs}
+              disabled={isGenerating || !selectedDocId}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+            >
+              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <span>Generate MCQs</span>
+            </button>
+          </div>
+
+          {/* Results Preview */}
+          <div className="lg:col-span-2 p-6 rounded-2xl bg-[#111827] border border-[#1f2937]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-white">
+                Generated Assessment Questions ({generatedMCQs.length})
+              </h2>
+              {generatedMCQs.length > 0 && (
+                <button
+                  onClick={handleLaunchTest}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow"
+                >
+                  <FileCheck2 className="h-4 w-4" />
+                  <span>Start Interactive Test</span>
+                </button>
+              )}
+            </div>
+
+            {isGenerating && (
+              <div className="p-8 text-center text-xs text-indigo-400 flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{statusMessage}</span>
+              </div>
+            )}
+
+            {!isGenerating && generatedMCQs.length === 0 && (
+              <div className="p-12 text-center text-xs text-gray-500">
+                Configure parameters and click Generate MCQs to inspect examination items.
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {generatedMCQs.map((q, idx) => (
+                <div key={idx} className="p-4 rounded-xl bg-[#0b0f17] border border-[#1f2937] space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-xs font-semibold text-gray-200">
+                      Q{idx + 1}. {q.question}
+                    </span>
+                    <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      {q.difficulty || "Medium"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                    {q.options?.map((opt: string, oi: number) => (
+                      <div
+                        key={oi}
+                        className={`p-2.5 rounded-lg text-xs border ${
+                          opt === q.correct_answer
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 font-medium"
+                            : "bg-gray-900/60 border-gray-800 text-gray-400"
+                        }`}
+                      >
+                        {opt}
+                      </div>
+                    ))}
+                  </div>
+
+                  {q.explanation && (
+                    <div className="text-[11px] text-gray-400 mt-2 pt-2 border-t border-gray-800/60">
+                      <strong>Academic Explanation:</strong> {q.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB B & C: Marks-Based Questions */}
+      {activeTab === "short_long" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="p-6 rounded-2xl bg-[#111827] border border-[#1f2937] space-y-4">
+            <h2 className="text-sm font-semibold text-white">Marks-Tailored Question Rubric</h2>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Target Marks Allocation</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[2, 3, 5, 10, 15].map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMarksValue(m)}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      marksValue === m
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "bg-gray-900 text-gray-400 hover:text-white border border-gray-800"
+                    }`}
+                  >
+                    {m}M
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="text-[11px] text-gray-400 bg-gray-900/80 p-3 rounded-xl border border-gray-800">
+              {marksValue <= 2 && "2 Marks Rubric: Direct definition, 2 essential points, concise answer."}
+              {marksValue === 3 && "3 Marks Rubric: Definition + 3 core explanatory mechanisms."}
+              {marksValue === 5 && "5 Marks Rubric: Introduction, structured explanation, key points & concrete examples."}
+              {marksValue === 10 && "10 Marks Rubric: Detailed introduction, structured explanation with subheadings, examples, conclusion."}
+              {marksValue === 15 && "15 Marks Rubric: Comprehensive academic essay, flowchart/architecture representation, critical evaluation, conclusion."}
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Topic or Concept</label>
+              <input
+                type="text"
+                value={marksTopic}
+                onChange={(e) => setMarksTopic(e.target.value)}
+                placeholder="e.g. Distributed consensus or CAP theorem"
+                className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <button
+              onClick={handleGenerateMarksQuestion}
+              disabled={isGenerating || !selectedDocId}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+            >
+              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <span>Generate {marksValue}-Mark Question</span>
+            </button>
+          </div>
+
+          {/* Results Preview */}
+          <div className="lg:col-span-2 p-6 rounded-2xl bg-[#111827] border border-[#1f2937]">
+            <h2 className="text-sm font-semibold text-white mb-4">
+              Model Question & Academic Answer Scheme
+            </h2>
+
+            {isGenerating && (
+              <div className="p-8 text-center text-xs text-indigo-400 flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{statusMessage}</span>
+              </div>
+            )}
+
+            {!isGenerating && !generatedMarksQuestion && (
+              <div className="p-12 text-center text-xs text-gray-500">
+                Select marks tier (2, 3, 5, 10, or 15 Marks) to preview structured model answers.
+              </div>
+            )}
+
+            {generatedMarksQuestion && (
+              <div className="p-5 rounded-xl bg-[#0b0f17] border border-[#1f2937] space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+                  <span className="text-sm font-bold text-white">
+                    {generatedMarksQuestion.question}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 font-bold text-xs border border-indigo-500/30">
+                    {generatedMarksQuestion.marks} Marks
+                  </span>
+                </div>
+
+                {/* Marking Rubric */}
+                {generatedMarksQuestion.marking_rubric && (
+                  <div className="p-3 rounded-xl bg-gray-900 border border-gray-800">
+                    <div className="text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-2">
+                      Official Marking Scheme Distribution:
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {generatedMarksQuestion.marking_rubric.map((r: any, idx: number) => (
+                        <div key={idx} className="p-2 rounded bg-black/40 text-[11px] text-gray-400">
+                          <span className="text-gray-200 font-semibold">{r.criterion}:</span> {r.marks}M
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Model Answer */}
+                <div className="text-xs md:text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-sans">
+                  {generatedMarksQuestion.model_answer}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB D: Question Paper Generator */}
+      {activeTab === "paper" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="p-6 rounded-2xl bg-[#111827] border border-[#1f2937] space-y-4">
+            <h2 className="text-sm font-semibold text-white">Paper Specifications</h2>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Examination Title</label>
+              <input
+                type="text"
+                value={paperTitle}
+                onChange={(e) => setPaperTitle(e.target.value)}
+                className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Subject / Discipline</label>
+              <input
+                type="text"
+                value={paperSubject}
+                onChange={(e) => setPaperSubject(e.target.value)}
+                className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Total Marks</label>
+                <input
+                  type="number"
+                  value={paperMarks}
+                  onChange={(e) => setPaperMarks(parseInt(e.target.value))}
+                  className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Duration (Mins)</label>
+                <input
+                  type="number"
+                  value={paperDuration}
+                  onChange={(e) => setPaperDuration(parseInt(e.target.value))}
+                  className="w-full bg-[#0b0f17] border border-[#1f2937] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleGeneratePaper}
+              disabled={isGenerating || !selectedDocId}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
+            >
+              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              <span>Generate Full Examination Paper</span>
+            </button>
+          </div>
+
+          {/* Paper View */}
+          <div className="lg:col-span-2 p-6 rounded-2xl bg-[#111827] border border-[#1f2937]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-white">Printable Examination Paper</h2>
+              {generatedPaper && (
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="h-4 w-4 text-indigo-400" />
+                  <span>Print / Export PDF</span>
+                </button>
+              )}
+            </div>
+
+            {isGenerating && (
+              <div className="p-8 text-center text-xs text-indigo-400 flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{statusMessage}</span>
+              </div>
+            )}
+
+            {!isGenerating && !generatedPaper && (
+              <div className="p-12 text-center text-xs text-gray-500">
+                Click Generate to compile full Section A, Section B, and Section C exam papers.
+              </div>
+            )}
+
+            {generatedPaper && (
+              <div className="p-8 rounded-xl bg-white text-gray-900 shadow-2xl print:shadow-none space-y-6 font-serif">
+                {/* Header */}
+                <div className="text-center border-b-2 border-gray-900 pb-4">
+                  <h1 className="text-xl font-bold uppercase tracking-wider">{generatedPaper.title}</h1>
+                  <h2 className="text-sm font-semibold text-gray-700 mt-1">{generatedPaper.subject}</h2>
+                  <div className="flex justify-between text-xs font-sans font-semibold mt-3 text-gray-600">
+                    <span>Duration: {generatedPaper.duration_minutes} Minutes</span>
+                    <span>Total Marks: {generatedPaper.total_marks} Marks</span>
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div className="text-xs font-sans text-gray-700 space-y-1">
+                  <strong>Instructions:</strong>
+                  {generatedPaper.instructions?.map((ins: string, idx: number) => (
+                    <div key={idx}>• {ins}</div>
+                  ))}
+                </div>
+
+                {/* Sections */}
+                {generatedPaper.sections?.map((sec: any, si: number) => (
+                  <div key={si} className="space-y-3 pt-3 border-t border-gray-300">
+                    <div className="flex justify-between items-center font-sans font-bold text-xs uppercase border-b pb-1 text-indigo-900">
+                      <span>{sec.section_name}</span>
+                      <span>[{sec.total_marks} Marks]</span>
+                    </div>
+
+                    <div className="space-y-4 text-xs font-sans">
+                      {sec.questions?.map((q: any, qi: number) => (
+                        <div key={qi} className="space-y-1">
+                          <div className="font-semibold text-gray-900">
+                            {qi + 1}. {q.question || q.question_text} {q.marks ? `(${q.marks} Marks)` : ""}
+                          </div>
+                          {q.options && (
+                            <div className="grid grid-cols-2 gap-1 text-[11px] text-gray-700 pl-4">
+                              {q.options.map((opt: string, oi: number) => (
+                                <div key={oi}>{opt}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

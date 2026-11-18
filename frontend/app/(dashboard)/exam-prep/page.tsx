@@ -60,13 +60,15 @@ function ExamPrepContent() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const [includeAnswersInExport, setIncludeAnswersInExport] = useState(false);
 
   // Export Exam Paper to Markdown
   const handleExportPaperMarkdown = () => {
     if (!generatedPaper) return;
     let md = `# ${generatedPaper.title}\n\n`;
     md += `**Subject:** ${generatedPaper.subject}  \n`;
-    md += `**Duration:** ${generatedPaper.duration_minutes} Minutes | **Total Marks:** ${generatedPaper.total_marks} Marks\n\n`;
+    md += `**Duration:** ${generatedPaper.duration_minutes} Minutes | **Total Marks:** ${generatedPaper.total_marks} Marks\n`;
+    md += `**Mode:** ${includeAnswersInExport ? "Complete with Solutions & Marking Rubrics" : "Student Practice Question Paper"}\n\n`;
     md += `## Instructions\n`;
     generatedPaper.instructions?.forEach((ins: string) => {
       md += `- ${ins}\n`;
@@ -82,24 +84,37 @@ function ExamPrepContent() {
             md += `- ${opt}\n`;
           });
         }
-        if (q.model_answer) {
-          md += `\n**Model Answer:**\n${q.model_answer}\n`;
-        }
-        if (q.marking_rubric) {
-          md += `\n**Marking Scheme:**\n`;
-          q.marking_rubric.forEach((r: any) => {
-            md += `- ${r.criterion}: ${r.marks}M\n`;
-          });
+        if (includeAnswersInExport) {
+          if (q.correct_answer) {
+            md += `\n**Correct Answer:** ${q.correct_answer}\n`;
+          }
+          if (q.explanation) {
+            md += `\n**Explanation:** ${q.explanation}\n`;
+          }
+          if (q.model_answer) {
+            md += `\n**Model Answer:**\n${q.model_answer}\n`;
+          }
+          if (q.marking_rubric) {
+            md += `\n**Marking Scheme:**\n`;
+            q.marking_rubric.forEach((r: any) => {
+              md += `- ${r.criterion}: ${r.marks}M\n`;
+            });
+          }
         }
         md += `\n`;
       });
     });
 
+    if (!includeAnswersInExport) {
+      md += `\n*(Solutions and marking rubrics omitted for practice examination mode)*\n`;
+    }
+
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${generatedPaper.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_exam_paper.md`;
+    const modeTag = includeAnswersInExport ? "with_solutions" : "practice_paper";
+    a.download = `${generatedPaper.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${modeTag}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -111,6 +126,8 @@ function ExamPrepContent() {
     if (!printWindow) return;
 
     let sectionsHtml = "";
+    let solutionsHtml = "";
+
     generatedPaper.sections?.forEach((sec: any) => {
       let questionsHtml = "";
       sec.questions?.forEach((q: any, qi: number) => {
@@ -124,6 +141,22 @@ function ExamPrepContent() {
             ${optionsHtml}
           </div>
         `;
+
+        if (includeAnswersInExport) {
+          let rubricList = "";
+          if (q.marking_rubric) {
+            rubricList = `<ul>${q.marking_rubric.map((r: any) => `<li>${r.criterion}: ${r.marks}M</li>`).join("")}</ul>`;
+          }
+          solutionsHtml += `
+            <div class="sol-block" style="margin-bottom: 16px;">
+              <div><strong>Q${qi + 1}: ${q.question || q.question_text}</strong></div>
+              ${q.correct_answer ? `<div><strong>Correct:</strong> ${q.correct_answer}</div>` : ""}
+              ${q.explanation ? `<div><em>Explanation:</em> ${q.explanation}</div>` : ""}
+              ${q.model_answer ? `<div style="margin-top: 4px; white-space: pre-wrap;"><strong>Model Answer:</strong><br/>${q.model_answer}</div>` : ""}
+              ${rubricList ? `<div style="margin-top: 4px;"><strong>Rubric:</strong>${rubricList}</div>` : ""}
+            </div>
+          `;
+        }
       });
 
       sectionsHtml += `
@@ -135,6 +168,13 @@ function ExamPrepContent() {
     });
 
     const instructionsHtml = generatedPaper.instructions?.map((ins: string) => `<li>${ins}</li>`).join("") || "";
+
+    const solutionsSection = includeAnswersInExport ? `
+      <div style="page-break-before: always; margin-top: 30px; border-top: 2px dashed #000; padding-top: 20px;">
+        <h2 style="text-align: center; font-size: 14pt; text-transform: uppercase; margin-bottom: 16px;">Complete Solutions & Marking Rubrics</h2>
+        ${solutionsHtml}
+      </div>
+    ` : "";
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -174,6 +214,7 @@ function ExamPrepContent() {
           <ul>${instructionsHtml}</ul>
         </div>
         ${sectionsHtml}
+        ${solutionsSection}
         <script>
           window.onload = () => { window.print(); window.close(); };
         </script>
@@ -659,10 +700,20 @@ function ExamPrepContent() {
 
           {/* Paper View */}
           <div className="lg:col-span-2 p-6 rounded-2xl bg-[#111827] border border-[#1f2937]">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-sm font-semibold text-white">Printable Examination Paper</h2>
               {generatedPaper && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer bg-[#0b0f17] border border-[#1f2937] hover:border-gray-700 px-2.5 py-1.5 rounded-lg select-none transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={includeAnswersInExport}
+                      onChange={(e) => setIncludeAnswersInExport(e.target.checked)}
+                      className="rounded border-gray-700 text-indigo-600 focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                    />
+                    <span className="font-medium">Include Answers / Rubrics</span>
+                  </label>
+
                   <button
                     onClick={handleExportPaperMarkdown}
                     className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -735,6 +786,35 @@ function ExamPrepContent() {
                               {q.options.map((opt: string, oi: number) => (
                                 <div key={oi}>{opt}</div>
                               ))}
+                            </div>
+                          )}
+
+                          {includeAnswersInExport && (
+                            <div className="mt-1.5 pl-3 border-l-2 border-indigo-400 text-[11px] text-gray-700 space-y-1 bg-gray-50/80 p-2 rounded">
+                              {q.correct_answer && (
+                                <div><strong className="text-emerald-700">Correct:</strong> {q.correct_answer}</div>
+                              )}
+                              {q.explanation && (
+                                <div><strong className="text-gray-900">Explanation:</strong> {q.explanation}</div>
+                              )}
+                              {q.model_answer && (
+                                <div className="mt-1">
+                                  <strong className="text-indigo-900">Model Answer:</strong>
+                                  <div className="whitespace-pre-wrap text-gray-800 mt-0.5">{q.model_answer}</div>
+                                </div>
+                              )}
+                              {q.marking_rubric && (
+                                <div className="pt-1 mt-1 border-t border-gray-200">
+                                  <strong className="text-indigo-900">Marking Rubric:</strong>
+                                  <div className="flex flex-wrap gap-2 mt-0.5">
+                                    {q.marking_rubric.map((r: any, ri: number) => (
+                                      <span key={ri} className="bg-white px-1.5 py-0.5 rounded border text-[10px] text-gray-600">
+                                        {r.criterion}: <strong>{r.marks}M</strong>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

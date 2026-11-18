@@ -15,6 +15,7 @@ class CitationItem(BaseModel):
     page_number: int
     heading: Optional[str] = None
     excerpt: str
+    citation: Optional[str] = None
     relevance_score: Optional[float] = None
 
 class ChatMessageOut(BaseModel):

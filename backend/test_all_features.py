@@ -110,6 +110,30 @@ def run_tests():
     assert '"type": "done"' in stream_body, "Expected stream completion event"
     print("✔ 6b. SSE Real-time Chat Streaming & Multi-Doc Citations: OK (Events streamed)")
 
+    # 6c. Multi-Document Balanced Citation Retrieval
+    multi_doc_res = client.post(
+        "/api/v1/assistant/chat",
+        headers=headers,
+        json={
+            "content": "Compare memory paging with distributed systems consensus principles.",
+            "document_ids": [doc_id, new_doc_id],
+            "tone": "academic"
+        }
+    )
+    assert multi_doc_res.status_code == 200, f"Multi-doc chat failed: {multi_doc_res.text}"
+    multi_data = multi_doc_res.json()
+    assert "citations" in multi_data
+    multi_cits = multi_data["citations"]
+    assert len(multi_cits) > 0, "Expected citations from multi-doc retrieval"
+    retrieved_doc_ids = {c["document_id"] for c in multi_cits}
+    assert len(retrieved_doc_ids) > 1, f"Expected balanced retrieval across documents, got: {retrieved_doc_ids}"
+    for cit in multi_cits:
+        assert "document_title" in cit
+        assert "page_number" in cit
+        assert "citation" in cit
+        assert "Page" in cit["citation"]
+    print(f"✔ 6c. Multi-Document Balanced Citation Retrieval: OK ({len(multi_cits)} citations across documents #{doc_id} & #{new_doc_id})")
+
     # 7. Exam Preparation: MCQ Generation
     mcq_res = client.post(
         "/api/v1/exam/generate-mcqs",

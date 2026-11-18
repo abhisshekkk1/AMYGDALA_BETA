@@ -56,18 +56,20 @@ async def chat_message(
     doc_ids = chat_in.document_ids or json.loads(session.selected_document_ids or "[]")
     
     if len(doc_ids) > 1:
-        # Balanced multi-document retrieval: 3 chunks per doc, capped at 12 total
+        # Balanced multi-document retrieval: 2-4 chunks per doc, capped at 12 total
         per_doc = max(2, min(4, 12 // len(doc_ids)))
         citations = []
         seen_chunk_ids = set()
-        for doc_id in doc_ids:
+        for d_id in doc_ids:
             doc_chunks = RAGEngine.retrieve_relevant_chunks(
                 db=db,
                 query=chat_in.content,
-                document_ids=[doc_id],
+                document_ids=[d_id],
                 top_k=per_doc,
-                threshold=0.1
+                threshold=0.05
             )
+            if not doc_chunks:
+                doc_chunks = RAGEngine.get_stratified_chunks(db=db, document_id=d_id, max_chunks=per_doc)
             for c in doc_chunks:
                 if c["chunk_id"] not in seen_chunk_ids:
                     seen_chunk_ids.add(c["chunk_id"])
@@ -268,11 +270,13 @@ async def chat_stream(
         per_doc = max(2, min(4, 12 // len(doc_ids)))
         citations = []
         seen_chunk_ids: set = set()
-        for doc_id in doc_ids:
+        for d_id in doc_ids:
             doc_chunks = RAGEngine.retrieve_relevant_chunks(
-                db=db, query=chat_in.content, document_ids=[doc_id],
-                top_k=per_doc, threshold=0.1
+                db=db, query=chat_in.content, document_ids=[d_id],
+                top_k=per_doc, threshold=0.05
             )
+            if not doc_chunks:
+                doc_chunks = RAGEngine.get_stratified_chunks(db=db, document_id=d_id, max_chunks=per_doc)
             for c in doc_chunks:
                 if c["chunk_id"] not in seen_chunk_ids:
                     seen_chunk_ids.add(c["chunk_id"])

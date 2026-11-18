@@ -3,7 +3,8 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Document } from "@/types";
+import { Document, Citation } from "@/types";
+import { DocumentPageDrawer } from "@/components/DocumentPageDrawer";
 import {
   GraduationCap,
   Sparkles,
@@ -14,7 +15,11 @@ import {
   HelpCircle,
   Loader2,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  Code2,
+  Download,
+  Copy,
+  Check
 } from "lucide-react";
 
 export default function ExamPrepPage() {
@@ -54,6 +59,129 @@ function ExamPrepContent() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+
+  // Export Exam Paper to Markdown
+  const handleExportPaperMarkdown = () => {
+    if (!generatedPaper) return;
+    let md = `# ${generatedPaper.title}\n\n`;
+    md += `**Subject:** ${generatedPaper.subject}  \n`;
+    md += `**Duration:** ${generatedPaper.duration_minutes} Minutes | **Total Marks:** ${generatedPaper.total_marks} Marks\n\n`;
+    md += `## Instructions\n`;
+    generatedPaper.instructions?.forEach((ins: string) => {
+      md += `- ${ins}\n`;
+    });
+    md += `\n---\n\n`;
+
+    generatedPaper.sections?.forEach((sec: any) => {
+      md += `## ${sec.section_name} [${sec.total_marks} Marks]\n\n`;
+      sec.questions?.forEach((q: any, qi: number) => {
+        md += `### ${qi + 1}. ${q.question || q.question_text} ${q.marks ? `(${q.marks} Marks)` : ""}\n`;
+        if (q.options) {
+          q.options.forEach((opt: string) => {
+            md += `- ${opt}\n`;
+          });
+        }
+        if (q.model_answer) {
+          md += `\n**Model Answer:**\n${q.model_answer}\n`;
+        }
+        if (q.marking_rubric) {
+          md += `\n**Marking Scheme:**\n`;
+          q.marking_rubric.forEach((r: any) => {
+            md += `- ${r.criterion}: ${r.marks}M\n`;
+          });
+        }
+        md += `\n`;
+      });
+    });
+
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${generatedPaper.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_exam_paper.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Print-Ready Academic Exam Paper
+  const handlePrintPaper = () => {
+    if (!generatedPaper) return;
+    const printWindow = window.open("", "_blank", "width=900,height=750");
+    if (!printWindow) return;
+
+    let sectionsHtml = "";
+    generatedPaper.sections?.forEach((sec: any) => {
+      let questionsHtml = "";
+      sec.questions?.forEach((q: any, qi: number) => {
+        let optionsHtml = "";
+        if (q.options) {
+          optionsHtml = `<div class="options">${q.options.map((opt: string) => `<div>${opt}</div>`).join("")}</div>`;
+        }
+        questionsHtml += `
+          <div class="question-block">
+            <div class="q-text"><strong>${qi + 1}.</strong> ${q.question || q.question_text} <span class="marks">${q.marks ? `[${q.marks} Marks]` : ""}</span></div>
+            ${optionsHtml}
+          </div>
+        `;
+      });
+
+      sectionsHtml += `
+        <div class="section-block">
+          <div class="section-title"><span>${sec.section_name}</span><span>[${sec.total_marks} Marks]</span></div>
+          ${questionsHtml}
+        </div>
+      `;
+    });
+
+    const instructionsHtml = generatedPaper.instructions?.map((ins: string) => `<li>${ins}</li>`).join("") || "";
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${generatedPaper.title}</title>
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: 'Times New Roman', Georgia, serif; font-size: 11pt; color: #111; padding: 2cm 2.5cm; line-height: 1.5; }
+          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
+          .header h1 { font-size: 16pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+          .header h2 { font-size: 12pt; font-weight: normal; margin-top: 4px; }
+          .meta { display: flex; justify-content: space-between; font-size: 10pt; font-weight: bold; margin-top: 10px; }
+          .instructions { font-size: 10pt; margin-bottom: 16px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+          .instructions ul { margin-left: 20px; }
+          .section-block { margin-top: 20px; }
+          .section-title { font-weight: bold; font-size: 11pt; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; display: flex; justify-content: space-between; margin-bottom: 12px; }
+          .question-block { margin-bottom: 14px; page-break-inside: avoid; }
+          .q-text { font-size: 11pt; }
+          .marks { float: right; font-weight: bold; }
+          .options { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 10pt; margin-top: 6px; padding-left: 20px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${generatedPaper.title}</h1>
+          <h2>${generatedPaper.subject}</h2>
+          <div class="meta">
+            <span>Duration: ${generatedPaper.duration_minutes} Minutes</span>
+            <span>Maximum Marks: ${generatedPaper.total_marks}</span>
+          </div>
+        </div>
+        <div class="instructions">
+          <strong>General Instructions:</strong>
+          <ul>${instructionsHtml}</ul>
+        </div>
+        ${sectionsHtml}
+        <script>
+          window.onload = () => { window.print(); window.close(); };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   useEffect(() => {
     api.getDocuments().then((docs) => {
@@ -308,6 +436,27 @@ function ExamPrepContent() {
                       <strong>Academic Explanation:</strong> {q.explanation}
                     </div>
                   )}
+
+                  {q.source_page && (
+                    <div className="pt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveCitation({
+                            document_id: selectedDocId || 1,
+                            document_title: q.document_name || "Study Document",
+                            page_number: q.source_page || 1,
+                            excerpt: q.explanation || q.question,
+                            citation: `[${q.document_name || "Source"} — Page ${q.source_page || 1}]`
+                          });
+                        }}
+                        className="px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-[11px] text-emerald-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <BookOpen className="h-3 w-3" />
+                        <span>{q.document_name || "Source"} • Page {q.source_page}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -419,6 +568,32 @@ function ExamPrepContent() {
                 <div className="text-xs md:text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-sans">
                   {generatedMarksQuestion.model_answer}
                 </div>
+
+                {/* Source Citations */}
+                {generatedMarksQuestion.source_citations && generatedMarksQuestion.source_citations.length > 0 && (
+                  <div className="pt-3 border-t border-gray-800 flex items-center gap-2">
+                    <span className="text-[11px] text-gray-500">Source:</span>
+                    {generatedMarksQuestion.source_citations.map((c: any, ci: number) => (
+                      <button
+                        key={ci}
+                        type="button"
+                        onClick={() => {
+                          setActiveCitation({
+                            document_id: selectedDocId || 1,
+                            document_title: c.document || "Study Document",
+                            page_number: c.page || 1,
+                            excerpt: generatedMarksQuestion.model_answer.slice(0, 200),
+                            citation: `[${c.document || "Source"} — Page ${c.page || 1}]`
+                          });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-[11px] text-emerald-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <BookOpen className="h-3 w-3" />
+                        <span>{c.document} • Page {c.page}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -487,13 +662,24 @@ function ExamPrepContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-white">Printable Examination Paper</h2>
               {generatedPaper && (
-                <button
-                  onClick={() => window.print()}
-                  className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Printer className="h-4 w-4 text-indigo-400" />
-                  <span>Print / Export PDF</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportPaperMarkdown}
+                    className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-semibold text-gray-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Export as Markdown"
+                  >
+                    <Code2 className="h-4 w-4 text-indigo-400" />
+                    <span>Export to Markdown</span>
+                  </button>
+                  <button
+                    onClick={handlePrintPaper}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors shadow cursor-pointer"
+                    title="Print / Save as PDF"
+                  >
+                    <Printer className="h-4 w-4" />
+                    <span>Print / Save as PDF</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -561,6 +747,9 @@ function ExamPrepContent() {
           </div>
         </div>
       )}
+
+      {/* Side-panel page preview drawer */}
+      <DocumentPageDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Document, ChatSession, ChatMessage, Citation } from "@/types";
+import { DocumentPageDrawer } from "@/components/DocumentPageDrawer";
 import {
   Bot,
   Send,
@@ -19,8 +20,11 @@ import {
   HelpCircle,
   ExternalLink,
   Loader2,
-  ChevronRight
+  ChevronRight,
+  Zap
 } from "lucide-react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
 
 export default function AssistantPage() {
   return (
@@ -45,6 +49,8 @@ function AssistantContent() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [savedNoteId, setSavedNoteId] = useState<number | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [useStreaming, setUseStreaming] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +102,7 @@ function AssistantContent() {
 
     setInputText("");
     setIsSending(true);
+    setStreamingText("");
 
     // Optimistic user message
     const tempUserMsg: ChatMessage = {
@@ -107,33 +114,123 @@ function AssistantContent() {
     };
     setMessages((prev) => [...prev, tempUserMsg]);
 
-    try {
-      const response = await api.sendChatMessage(
-        text,
-        selectedDocIds,
-        activeSessionId,
-        tone
-      );
+    if (useStreaming) {
+      // --- SSE Streaming path ---
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("amygdala_token") : null;
+        const res = await fetch(`${API_BASE_URL}/assistant/chat/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            content: text,
+            document_ids: selectedDocIds,
+            session_id: activeSessionId,
+            tone,
+          }),
+        });
 
-      setMessages((prev) => [...prev, response]);
+        if (!res.ok || !res.body) throw new Error(`Stream failed: HTTP ${res.status}`);
 
-      // Refresh sessions list
-      const updatedSessions = await api.getChatSessions();
-      setSessions(updatedSessions);
-      if (!activeSessionId && updatedSessions.length > 0) {
-        setActiveSessionId(updatedSessions[0].id);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedText = "";
+        let streamCitations: Citation[] = [];
+        let messageId: number | null = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const payload = JSON.parse(line.slice(6));
+              if (payload.type === "citations") {
+                streamCitations = payload.citations || [];
+                if (payload.session_id && !activeSessionId) {
+                  setActiveSessionId(payload.session_id);
+                }
+              } else if (payload.type === "token") {
+                accumulatedText += payload.text;
+                setStreamingText(accumulatedText);
+              } else if (payload.type === "done") {
+                messageId = payload.message_id;
+              }
+            } catch {
+              // skip malformed SSE lines
+            }
+          }
+        }
+
+        // Commit final streaming message
+        const finalMsg: ChatMessage = {
+          id: messageId || Date.now() + 1,
+          role: "assistant",
+          content: accumulatedText,
+          citations: streamCitations,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, finalMsg]);
+        setStreamingText("");
+
+        // Refresh sessions list
+        const updatedSessions = await api.getChatSessions();
+        setSessions(updatedSessions);
+        if (!activeSessionId && updatedSessions.length > 0) {
+          setActiveSessionId(updatedSessions[0].id);
+        }
+      } catch (err: any) {
+        // Fallback to non-streaming if SSE fails
+        setStreamingText("");
+        try {
+          const response = await api.sendChatMessage(text, selectedDocIds, activeSessionId, tone);
+          setMessages((prev) => [...prev, response]);
+          const updatedSessions = await api.getChatSessions();
+          setSessions(updatedSessions);
+          if (!activeSessionId && updatedSessions.length > 0) {
+            setActiveSessionId(updatedSessions[0].id);
+          }
+        } catch (fallbackErr: any) {
+          const errorMsg: ChatMessage = {
+            id: Date.now() + 1,
+            role: "assistant",
+            content: `⚠️ Error: ${fallbackErr.message || "Failed to generate AI response."}`,
+            citations: [],
+            created_at: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, errorMsg]);
+        }
+      } finally {
+        setIsSending(false);
       }
-    } catch (err: any) {
-      const errorMsg: ChatMessage = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: `⚠️ Error: ${err.message || "Failed to generate AI response. Please ensure backend is running."}`,
-        citations: [],
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsSending(false);
+    } else {
+      // --- Non-streaming (legacy) path ---
+      try {
+        const response = await api.sendChatMessage(text, selectedDocIds, activeSessionId, tone);
+        setMessages((prev) => [...prev, response]);
+        const updatedSessions = await api.getChatSessions();
+        setSessions(updatedSessions);
+        if (!activeSessionId && updatedSessions.length > 0) {
+          setActiveSessionId(updatedSessions[0].id);
+        }
+      } catch (err: any) {
+        const errorMsg: ChatMessage = {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: `⚠️ Error: ${err.message || "Failed to generate AI response. Please ensure backend is running."}`,
+          citations: [],
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      } finally {
+        setIsSending(false);
+      }
     }
   };
 
@@ -397,12 +494,21 @@ function AssistantContent() {
 
           {isSending && (
             <div className="flex gap-3 justify-start">
-              <div className="h-8 w-8 min-w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shrink-0">
+              <div className="h-8 w-8 min-w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shrink-0 mt-1">
                 <Bot className="h-4 w-4" />
               </div>
-              <div className="rounded-2xl p-4 bg-[#0b0f17] border border-[#1f2937] text-xs text-indigo-400 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Searching documents & generating grounded response...</span>
+              <div className="max-w-2xl rounded-2xl p-4 text-xs md:text-sm leading-relaxed bg-[#0b0f17] border border-indigo-500/30 text-gray-200 rounded-tl-none shadow-lg shadow-indigo-500/5">
+                {streamingText ? (
+                  <div className="whitespace-pre-wrap">
+                    {streamingText}
+                    <span className="inline-block w-1.5 h-3.5 bg-indigo-400 ml-1 animate-pulse align-middle" />
+                  </div>
+                ) : (
+                  <div className="text-xs text-indigo-400 flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Searching documents & generating grounded response...</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -437,37 +543,8 @@ function AssistantContent() {
         </div>
       </div>
 
-      {/* Citation Inspector Modal */}
-      {activeCitation && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-[#111827] border border-[#1f2937] rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-white">
-                  Source Grounding Excerpt
-                </h3>
-              </div>
-              <button
-                onClick={() => setActiveCitation(null)}
-                className="text-xs text-gray-400 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="text-xs text-gray-400 flex items-center justify-between">
-                <span>Document: <strong>{activeCitation.document_title}</strong></span>
-                <span className="font-mono text-indigo-400">Page {activeCitation.page_number}</span>
-              </div>
-              <div className="p-4 rounded-xl bg-[#0b0f17] border border-gray-800 text-xs text-gray-300 leading-relaxed font-mono whitespace-pre-wrap">
-                &ldquo;{activeCitation.excerpt}&rdquo;
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Side-Panel Page Preview / Split-Screen Viewer */}
+      <DocumentPageDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   );
 }

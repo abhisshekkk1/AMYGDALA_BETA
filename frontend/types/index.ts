@@ -85,7 +85,7 @@ export interface TestQuestion {
   options?: string[];
   correct_answer?: string;
   explanation?: string;
-  source_citation?: { doc?: string; page?: number };
+  source_citation?: { doc?: string; page?: number; document_title?: string };
   user_answer?: string;
   is_correct?: boolean;
   marks_awarded?: number;
@@ -103,6 +103,7 @@ export interface CreateTestFromMCQsRequest {
 export interface PracticeTest {
   id: number;
   title: string;
+  document_id?: number;
   subject?: string;
   difficulty: string;
   duration_minutes: number;

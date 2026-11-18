@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { FlashcardDeck, Flashcard, Document } from "@/types";
+import { FlashcardDeck, Flashcard, Document, Citation } from "@/types";
+import { DocumentPageDrawer } from "@/components/DocumentPageDrawer";
 import {
   Sparkles,
   RotateCw,
@@ -28,6 +29,7 @@ export default function FlashcardsPage() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
 
   // New Deck Modal
   const [showNewDeckModal, setShowNewDeckModal] = useState(false);
@@ -224,7 +226,29 @@ export default function FlashcardsPage() {
             </div>
 
             <div className="flex items-center justify-between text-[11px] text-gray-500 border-t border-gray-800/80 pt-3">
-              <span>{currentCard?.source_citation || "Grounded Source"}</span>
+              {currentCard?.source_citation ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeDeck) {
+                      setActiveCitation({
+                        document_id: activeDeck.document_id || 1,
+                        document_title: activeDeck.title,
+                        page_number: currentCard.source_page || 1,
+                        excerpt: `${currentCard.front} — ${currentCard.back}`,
+                        citation: currentCard.source_citation
+                      });
+                    }
+                  }}
+                  className="text-emerald-400 hover:text-emerald-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <BookOpen className="h-3 w-3" />
+                  <span>{currentCard.source_citation}</span>
+                </button>
+              ) : (
+                <span>Grounded Source</span>
+              )}
               <span>Interval: {currentCard?.interval_days || 0}d</span>
             </div>
           </div>
@@ -384,6 +408,9 @@ export default function FlashcardsPage() {
           </div>
         </div>
       )}
+
+      {/* Side-panel page viewer drawer */}
+      <DocumentPageDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   );
 }

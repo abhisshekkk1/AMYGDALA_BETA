@@ -118,7 +118,7 @@ class RAGEngine:
                 "heading": chunk.heading or f"Page {chunk.page_number}",
                 "content": chunk.content,
                 "excerpt": excerpt,
-                "citation": f"[Page {chunk.page_number}]",
+                "citation": f"[{doc_title} — Page {chunk.page_number}]",
                 "relevance_score": round(score, 3)
             })
 
@@ -165,7 +165,7 @@ class RAGEngine:
                 "heading": c.heading or f"Page {c.page_number}",
                 "content": c.content,
                 "excerpt": excerpt,
-                "citation": f"[Page {c.page_number}]",
+                "citation": f"[{doc_title} — Page {c.page_number}]",
                 "relevance_score": 1.0
             })
 

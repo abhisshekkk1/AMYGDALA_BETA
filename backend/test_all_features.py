@@ -93,6 +93,23 @@ def run_tests():
     assert len(chat_data["citations"]) > 0, "Expected citations from RAG retrieval"
     print(f"✔ 6. RAG AI Assistant with Page Citations: OK ({len(chat_data['citations'])} source citations returned)")
 
+    # 6b. SSE Real-time Chat Streaming & Multi-Document Citations
+    stream_res = client.post(
+        "/api/v1/assistant/chat/stream",
+        headers=headers,
+        json={
+            "content": "What are the core trade-offs discussed in these materials?",
+            "document_ids": [doc_id],
+            "tone": "bullet_points"
+        }
+    )
+    assert stream_res.status_code == 200, f"Chat stream failed: {stream_res.text}"
+    stream_body = stream_res.text
+    assert "data: " in stream_body, "Expected SSE data payloads"
+    assert '"type": "citations"' in stream_body, "Expected citations event"
+    assert '"type": "done"' in stream_body, "Expected stream completion event"
+    print("✔ 6b. SSE Real-time Chat Streaming & Multi-Doc Citations: OK (Events streamed)")
+
     # 7. Exam Preparation: MCQ Generation
     mcq_res = client.post(
         "/api/v1/exam/generate-mcqs",

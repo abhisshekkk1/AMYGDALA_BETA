@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { MindMap, Document } from "@/types";
+import { MindMap, Document, Citation } from "@/types";
+import { DocumentPageDrawer } from "@/components/DocumentPageDrawer";
 import {
   GitFork,
   Sparkles,
@@ -27,6 +28,7 @@ export default function MindMapsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
 
   useEffect(() => {
     async function loadMindMaps() {
@@ -214,9 +216,28 @@ export default function MindMapsPage() {
                         {leaves.map((leaf) => (
                           <div
                             key={leaf.id}
-                            className="p-3 rounded-xl bg-gray-900/90 border border-gray-800 text-xs text-gray-300 shadow hover:border-gray-700 transition-colors"
+                            className="p-3 rounded-xl bg-gray-900/90 border border-gray-800 text-xs text-gray-300 shadow hover:border-gray-700 transition-colors flex items-center justify-between gap-2"
                           >
-                            {leaf.label}
+                            <span>{leaf.label}</span>
+                            {activeMindmap?.document_id && (
+                              <button
+                                type="button"
+                                title="Inspect Source Page"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveCitation({
+                                    document_id: activeMindmap.document_id || 1,
+                                    document_title: activeMindmap.title,
+                                    page_number: (leaf as any).source_page || 1,
+                                    excerpt: leaf.label,
+                                    citation: `[Page ${(leaf as any).source_page || 1}]`
+                                  });
+                                }}
+                                className="p-1 rounded text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer transition-colors shrink-0"
+                              >
+                                <BookOpen className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -240,6 +261,9 @@ export default function MindMapsPage() {
           </p>
         </div>
       )}
+
+      {/* Side-panel page viewer drawer */}
+      <DocumentPageDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   );
 }

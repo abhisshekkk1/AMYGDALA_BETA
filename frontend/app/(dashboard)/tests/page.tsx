@@ -3,7 +3,8 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { PracticeTest, TestQuestion } from "@/types";
+import { PracticeTest, TestQuestion, Citation } from "@/types";
+import { DocumentPageDrawer } from "@/components/DocumentPageDrawer";
 import {
   FileCheck2,
   Clock,
@@ -42,6 +43,7 @@ function TestsContent() {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(1200); // 20 mins default
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedTestResult, setCompletedTestResult] = useState<PracticeTest | null>(null);
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
 
   const loadTests = async () => {
     try {
@@ -339,6 +341,29 @@ function TestsContent() {
                   <strong>Explanation:</strong> {q.explanation}
                 </div>
               )}
+
+              {q.source_citation && (
+                <div className="pt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveCitation({
+                        document_id: completedTestResult.document_id || 1,
+                        document_title: q.source_citation?.doc || q.source_citation?.document_title || "Source Document",
+                        page_number: q.source_citation?.page || 1,
+                        excerpt: q.explanation || q.question_text,
+                        citation: `[${q.source_citation?.doc || "Source"} — Page ${q.source_citation?.page || 1}]`
+                      });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-[11px] text-emerald-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <BookOpen className="h-3 w-3" />
+                    <span>
+                      {q.source_citation.doc || q.source_citation.document_title || "Source"} • Page {q.source_citation.page || 1}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -419,6 +444,9 @@ function TestsContent() {
           </div>
         ))}
       </div>
+
+      {/* Side-panel page viewer drawer */}
+      <DocumentPageDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />
     </div>
   );
 }

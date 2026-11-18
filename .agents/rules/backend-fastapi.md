@@ -1,5 +1,7 @@
 ---
-globs: ["backend/**/*.py"]
+trigger: glob
+globs: "backend/**/*.py"
+description: FastAPI, SQLAlchemy, and Pydantic v2 rules for AMYGDALA backend
 ---
 
 # Backend Rules: FastAPI, SQLAlchemy & Pydantic v2

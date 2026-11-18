@@ -1,16 +1,22 @@
 import json
-import re
 from typing import List, Dict, Any, Optional
 from app.services.ai_providers import AIProviderService
+from app.services.rag_engine import RAGEngine
+from sqlalchemy.orm import Session
 
 class ExamEngine:
     """
-    Intelligent examination generation engine supporting:
+    Intelligent examination generation engine using generate_structured_json for all outputs.
+    Supports:
     - Multiple Choice Questions (Easy, Medium, Hard)
-    - Short Answer Questions (2, 3, 5 marks with tailored rubric)
-    - Long Answer Questions (5, 10, 15 marks with academic structure)
+    - Short/Long Answer Questions (2, 3, 5, 10, 15 marks with structured rubrics)
     - Full Question Paper Generator with sections, durations, and answer key
+    All generated questions include source_citation_json with document title and page number.
     """
+
+    # ------------------------------------------------------------------ #
+    #  MCQ Generation                                                     #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     async def generate_mcqs(
@@ -27,41 +33,40 @@ class ExamEngine:
 
         context_text = "\n\n".join([
             f"[Source: {c['document_title']} | Page {c['page_number']}]\n{c['content']}"
-            for c in context_chunks[:6]
+            for c in context_chunks[:8]
         ])
 
         prompt = (
             f"Generate exactly {num_questions} rigorous, examination-level Multiple Choice Questions (MCQs) "
             f"at '{difficulty}' difficulty based SOLELY on the study material below.\n\n"
-            f"Output MUST be strict valid JSON array of objects with the following schema:\n"
-            f"[\n"
-            f"  {{\n"
-            f"    \"question\": \"Question text here\",\n"
-            f"    \"options\": [\"Option A\", \"Option B\", \"Option C\", \"Option D\"],\n"
-            f"    \"correct_answer\": \"Option A\",\n"
-            f"    \"explanation\": \"Detailed academic reasoning for why this option is correct and others are incorrect\",\n"
-            f"    \"source_page\": 1,\n"
-            f"    \"difficulty\": \"{difficulty}\"\n"
-            f"  }}\n"
-            f"]\n\n"
+            f"Output MUST be a strict valid JSON array. Each object must have:\n"
+            f"- \"question\": string\n"
+            f"- \"options\": array of exactly 4 strings (e.g. [\"A) ...\", \"B) ...\", \"C) ...\", \"D) ...\"])\n"
+            f"- \"correct_answer\": string matching one option exactly\n"
+            f"- \"explanation\": detailed academic reasoning string\n"
+            f"- \"source_page\": integer page number from the source material\n"
+            f"- \"document_name\": string document title from the source material\n"
+            f"- \"difficulty\": \"{difficulty}\"\n\n"
+            f"Output ONLY the JSON array. No markdown, no preamble.\n\n"
             f"STUDY MATERIAL:\n{context_text}"
         )
 
-        messages = [{"role": "user", "content": prompt}]
-        response = await AIProviderService.generate_chat_response(
-            messages=messages,
-            context_chunks=context_chunks,
+        result = await AIProviderService.generate_structured_json(
+            prompt=prompt,
             provider=provider,
             api_key=api_key,
-            temperature=0.2
+            temperature=0.2,
+            context_chunks=context_chunks
         )
 
-        content = response.get("content", "")
-        parsed = cls._extract_json_array(content)
-        if parsed:
-            return parsed
+        if result.get("status") == "success" and isinstance(result.get("data"), list):
+            return result["data"]
 
         return cls._fallback_mcqs_from_chunks(context_chunks, num_questions, difficulty)
+
+    # ------------------------------------------------------------------ #
+    #  Marks-Based Question Generation (2, 3, 5, 10, 15 marks)           #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     async def generate_marks_question(
@@ -73,62 +78,69 @@ class ExamEngine:
         api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Generates examination question and model answer structured strictly according to the marks allocated:
-        - 2 marks: Direct definition, essential points, concise answer.
-        - 3 marks: Concise definition, 3 core explanatory points.
-        - 5 marks: Introduction, explanation, key points, relevant examples.
-        - 10 marks: Detailed introduction, structured explanation, subheadings, examples, conclusion.
-        - 15 marks: Comprehensive academic essay, logical structure, flowchart/diagram description, conclusion.
+        Generates exam question + model answer structured strictly according to marks allocated.
         """
         if marks <= 2:
             structure_req = "Direct definition, 2-3 essential points, concise and sharp answer (approx. 50-80 words)."
+            rubric_weights = [(0.3, "Concept definition"), (0.5, "Key points & explanation"), (0.2, "Conciseness & accuracy")]
         elif marks <= 3:
             structure_req = "Concise introduction, 3-4 distinct technical points, focused explanation (approx. 80-120 words)."
+            rubric_weights = [(0.3, "Accurate definition"), (0.5, "Three core points"), (0.2, "Clarity")]
         elif marks <= 5:
             structure_req = "Introduction, structured explanation, 4-5 key points with bullet points, and at least 1 concrete example (approx. 180-250 words)."
+            rubric_weights = [(0.2, "Introduction & context"), (0.5, "Key points & explanation"), (0.3, "Example & conclusion")]
         elif marks <= 10:
             structure_req = "Detailed introduction, structured explanation across 3-4 subheadings, real-world/academic examples, and a formal conclusion (approx. 400-500 words)."
-        else: # 15 marks
+            rubric_weights = [(0.2, "Introduction & definitions"), (0.4, "Structured explanation with subheadings"), (0.3, "Examples & analysis"), (0.1, "Conclusion")]
+        else:  # 15 marks
             structure_req = "Comprehensive academic answer: Executive Introduction, In-depth Conceptual Analysis with Subheadings, Flowchart or Architecture ASCII/Text representation, Critical Evaluation & Examples, and Concluding Remarks (approx. 600-800 words)."
+            rubric_weights = [(0.1, "Introduction"), (0.4, "In-depth conceptual analysis"), (0.2, "Diagram or flowchart representation"), (0.2, "Critical evaluation & examples"), (0.1, "Conclusion")]
+
+        rubric_items = [{"criterion": label, "marks": round(marks * w, 1)} for w, label in rubric_weights]
+
+        source_doc = context_chunks[0]["document_title"] if context_chunks else "Study Material"
+        source_page = context_chunks[0]["page_number"] if context_chunks else 1
 
         context_text = "\n\n".join([
             f"[Source: {c['document_title']} | Page {c['page_number']}]\n{c['content']}"
-            for c in context_chunks[:6]
+            for c in context_chunks[:8]
         ])
 
         prompt = (
-            f"Generate a {marks}-mark academic exam question on '{topic or 'the document content'}' based on the source material below.\n"
+            f"Generate a {marks}-mark academic exam question on '{topic or 'the document content'}' based on the source material.\n"
             f"Required Answer Structure for {marks} marks: {structure_req}\n\n"
-            f"Output MUST be strict JSON object with this format:\n"
+            f"Output MUST be a strict valid JSON object with exactly these fields:\n"
             f"{{\n"
             f"  \"marks\": {marks},\n"
-            f"  \"question\": \"The exam question\",\n"
-            f"  \"model_answer\": \"The complete, rigorous model answer formatted with markdown headers and bullet points according to the marks specification\",\n"
-            f"  \"marking_rubric\": [\n"
-            f"    {{\"criterion\": \"Concept definition\", \"marks\": {round(marks*0.3, 1)}}},\n"
-            f"    {{\"criterion\": \"Key points & explanation\", \"marks\": {round(marks*0.5, 1)}}},\n"
-            f"    {{\"criterion\": \"Examples & conclusion\", \"marks\": {round(marks*0.2, 1)}}}\n"
-            f"  ],\n"
-            f"  \"source_citations\": [{{\"document\": \"{context_chunks[0]['document_title'] if context_chunks else 'Text'}\", \"page\": {context_chunks[0]['page_number'] if context_chunks else 1}}}]\n"
+            f"  \"question\": \"The exam question text\",\n"
+            f"  \"model_answer\": \"Complete rigorous model answer formatted with markdown headers and bullet points\",\n"
+            f"  \"marking_rubric\": {json.dumps(rubric_items)},\n"
+            f"  \"source_citations\": [{{\"document\": \"{source_doc}\", \"page\": {source_page}}}]\n"
             f"}}\n\n"
+            f"Output ONLY the JSON object. No markdown fences, no preamble.\n\n"
             f"STUDY MATERIAL:\n{context_text}"
         )
 
-        messages = [{"role": "user", "content": prompt}]
-        response = await AIProviderService.generate_chat_response(
-            messages=messages,
-            context_chunks=context_chunks,
+        result = await AIProviderService.generate_structured_json(
+            prompt=prompt,
             provider=provider,
             api_key=api_key,
-            temperature=0.2
+            temperature=0.2,
+            context_chunks=context_chunks
         )
 
-        content = response.get("content", "")
-        parsed = cls._extract_json_object(content)
-        if parsed:
-            return parsed
+        if result.get("status") == "success" and isinstance(result.get("data"), dict):
+            data = result["data"]
+            # Ensure rubric is always present even if LLM omitted it
+            if "marking_rubric" not in data:
+                data["marking_rubric"] = rubric_items
+            return data
 
         return cls._fallback_marks_question(context_chunks, marks, topic)
+
+    # ------------------------------------------------------------------ #
+    #  Full Question Paper                                                #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     async def generate_full_question_paper(
@@ -142,10 +154,9 @@ class ExamEngine:
         api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Generates a comprehensive examination paper with Section A (MCQs & Short Questions),
-        Section B (Analytical 5-Mark Questions), and Section C (Comprehensive 10/15-Mark Long Questions).
+        Generates a comprehensive examination paper with Section A (MCQs),
+        Section B (5-mark analytical), and Section C (10/15-mark comprehensive).
         """
-        # Distribute marks
         sec_a_marks = int(total_marks * 0.3)
         sec_b_marks = int(total_marks * 0.4)
         sec_c_marks = total_marks - sec_a_marks - sec_b_marks
@@ -154,19 +165,27 @@ class ExamEngine:
         short_count = max(2, sec_b_marks // 5)
         long_count = max(1, sec_c_marks // 10)
 
-        mcqs = await cls.generate_mcqs(context_chunks, num_questions=mcq_count, provider=provider, api_key=api_key)
-        
+        mcqs = await cls.generate_mcqs(
+            context_chunks, num_questions=mcq_count, provider=provider, api_key=api_key
+        )
+
         short_questions = []
         for i in range(short_count):
-            q = await cls.generate_marks_question(context_chunks, marks=5, topic=f"Question {i+1}", provider=provider, api_key=api_key)
+            q = await cls.generate_marks_question(
+                context_chunks, marks=5,
+                topic=f"Topic {i + 1}", provider=provider, api_key=api_key
+            )
             short_questions.append(q)
 
         long_questions = []
         for i in range(long_count):
-            q = await cls.generate_marks_question(context_chunks, marks=10, topic=f"Comprehensive Question {i+1}", provider=provider, api_key=api_key)
+            q = await cls.generate_marks_question(
+                context_chunks, marks=10,
+                topic=f"Comprehensive Topic {i + 1}", provider=provider, api_key=api_key
+            )
             long_questions.append(q)
 
-        paper = {
+        return {
             "title": title,
             "subject": subject,
             "total_marks": total_marks,
@@ -195,33 +214,16 @@ class ExamEngine:
                 }
             ]
         }
-        return paper
 
-    @staticmethod
-    def _extract_json_array(text: str) -> Optional[List[Dict[str, Any]]]:
-        try:
-            match = re.search(r'\[\s*\{.*\}\s*\]', text, re.DOTALL)
-            if match:
-                return json.loads(match.group(0))
-            return json.loads(text)
-        except Exception:
-            return None
-
-    @staticmethod
-    def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
-        try:
-            match = re.search(r'\{\s*".*"\s*:.*\}', text, re.DOTALL)
-            if match:
-                return json.loads(match.group(0))
-            return json.loads(text)
-        except Exception:
-            return None
+    # ------------------------------------------------------------------ #
+    #  Fallback generators (no AI key / offline)                         #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     def _fallback_mcqs(cls, count: int, difficulty: str) -> List[Dict[str, Any]]:
         return [
             {
-                "question": f"Sample Practice Question {i+1} ({difficulty.capitalize()} level)",
+                "question": f"Sample Practice Question {i + 1} ({difficulty.capitalize()} level)",
                 "options": [
                     "A) Primary foundational concept and principle",
                     "B) Secondary secondary mechanism",
@@ -231,6 +233,7 @@ class ExamEngine:
                 "correct_answer": "A) Primary foundational concept and principle",
                 "explanation": "Option A accurately formulates the core concept described in the curriculum.",
                 "source_page": 1,
+                "document_name": "Study Material",
                 "difficulty": difficulty
             }
             for i in range(count)
@@ -246,7 +249,10 @@ class ExamEngine:
                 first_sentence = chunk["content"][:100]
 
             results.append({
-                "question": f"Based on {chunk['document_title']} (Page {chunk['page_number']}), what is stated regarding: \"{first_sentence[:80]}...\"?",
+                "question": (
+                    f"Based on {chunk['document_title']} (Page {chunk['page_number']}), "
+                    f"what is stated regarding: \"{first_sentence[:80]}...\"?"
+                ),
                 "options": [
                     f"A) {chunk['content'][:90].strip()}...",
                     "B) The assertion is not verified in empirical trials.",
@@ -256,13 +262,16 @@ class ExamEngine:
                 "correct_answer": f"A) {chunk['content'][:90].strip()}...",
                 "explanation": f"Explicitly stated in {chunk['document_title']} on Page {chunk['page_number']}.",
                 "source_page": chunk["page_number"],
+                "document_name": chunk["document_title"],
                 "difficulty": difficulty
             })
         return results
 
     @classmethod
     def _fallback_marks_question(cls, chunks: List[Dict[str, Any]], marks: int, topic: str) -> Dict[str, Any]:
-        chunk = chunks[0] if chunks else {"document_title": "Uploaded Study Notes", "page_number": 1, "content": "Core principles."}
+        chunk = chunks[0] if chunks else {
+            "document_title": "Uploaded Study Notes", "page_number": 1, "content": "Core principles."
+        }
         return {
             "marks": marks,
             "question": f"Explain the fundamental concepts and principles of {topic or chunk['document_title']} in detail ({marks} Marks).",

@@ -1,14 +1,24 @@
 import os
 import json
-from typing import List, Dict, Any, Optional
+import re
+from typing import List, Dict, Any, Optional, Type, TypeVar
+from pydantic import BaseModel, ValidationError
 import httpx
 from app.core.config import settings
+
+T = TypeVar("T", bound=BaseModel)
+
 
 class AIProviderService:
     """
     Provider-independent AI integration layer supporting OpenAI, Google Gemini,
     Ollama, and any OpenAI-compatible API endpoint.
+    All LLM calls are centralized here — no direct third-party API calls outside this class.
     """
+
+    # ------------------------------------------------------------------ #
+    #  Public: Chat Response (RAG-grounded)                               #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     async def generate_chat_response(
@@ -46,14 +56,123 @@ class AIProviderService:
             )
 
         augmented_messages = [{"role": "system", "content": system_grounding}] + messages
+        return await cls._dispatch(
+            messages=augmented_messages,
+            provider=provider,
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url,
+            temperature=temperature,
+            context_chunks=context_chunks
+        )
 
-        # Check API key from arguments or environment
+    # ------------------------------------------------------------------ #
+    #  Public: Structured JSON Generation with auto-retry                 #
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    async def generate_structured_json(
+        cls,
+        prompt: str,
+        provider: str = "openai",
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None,
+        base_url: Optional[str] = None,
+        temperature: float = 0.2,
+        schema_model: Optional[Type[T]] = None,
+        context_chunks: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Generates and parses a structured JSON response from the LLM.
+
+        Features:
+        - Strips markdown fences (```json ... ```) automatically.
+        - Validates against a Pydantic model if schema_model is provided.
+        - Performs 1 automatic self-correction retry if the first response is malformed JSON.
+        - Returns a dict with keys: data (parsed), raw (original text), status ("success"|"error"|"notice").
+        """
+        messages = [{"role": "user", "content": prompt}]
+        response = await cls._dispatch(
+            messages=messages,
+            provider=provider,
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url,
+            temperature=temperature,
+            context_chunks=context_chunks or []
+        )
+
+        if response.get("status") in ("error", "notice"):
+            return response
+
+        raw_text = response.get("content", "")
+        parsed = cls._parse_json(raw_text)
+
+        if parsed is not None:
+            if schema_model:
+                try:
+                    validated = schema_model.model_validate(parsed) if isinstance(parsed, dict) else parsed
+                    return {"data": validated.model_dump() if hasattr(validated, "model_dump") else parsed,
+                            "raw": raw_text, "status": "success"}
+                except (ValidationError, Exception):
+                    pass  # fall through to retry
+            return {"data": parsed, "raw": raw_text, "status": "success"}
+
+        # --- Self-correction retry ---
+        correction_prompt = (
+            f"Your previous response was not valid JSON. "
+            f"Return ONLY a valid JSON object or array — no markdown fences, no preamble, no commentary.\n\n"
+            f"Original task:\n{prompt}\n\n"
+            f"Your invalid response was:\n{raw_text}"
+        )
+        retry_messages = [{"role": "user", "content": correction_prompt}]
+        retry_response = await cls._dispatch(
+            messages=retry_messages,
+            provider=provider,
+            api_key=api_key,
+            model_name=model_name,
+            base_url=base_url,
+            temperature=0.0,  # deterministic on retry
+            context_chunks=[]
+        )
+
+        if retry_response.get("status") in ("error", "notice"):
+            return retry_response
+
+        retry_text = retry_response.get("content", "")
+        retry_parsed = cls._parse_json(retry_text)
+
+        if retry_parsed is not None:
+            return {"data": retry_parsed, "raw": retry_text, "status": "success", "retried": True}
+
+        return {
+            "data": None,
+            "raw": retry_text,
+            "status": "error",
+            "detail": "LLM returned malformed JSON after self-correction retry."
+        }
+
+    # ------------------------------------------------------------------ #
+    #  Private: Dispatch router                                           #
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    async def _dispatch(
+        cls,
+        messages: List[Dict[str, str]],
+        provider: str,
+        api_key: Optional[str],
+        model_name: Optional[str],
+        base_url: Optional[str],
+        temperature: float,
+        context_chunks: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Routes to the correct provider adapter with key validation."""
         effective_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
-        
-        # Route based on provider
+
         if provider == "ollama":
             return await cls._call_ollama(
-                messages=augmented_messages,
+                messages=messages,
                 model_name=model_name or settings.DEFAULT_OLLAMA_MODEL,
                 base_url=base_url or settings.DEFAULT_OLLAMA_BASE_URL,
                 temperature=temperature
@@ -61,25 +180,38 @@ class AIProviderService:
         elif provider == "gemini":
             gemini_key = api_key or os.getenv("GEMINI_API_KEY")
             if not gemini_key:
-                return cls._generate_offline_grounded_response(messages, context_chunks, "Gemini API key is not configured. Please add it in Settings.")
+                return cls._generate_offline_grounded_response(
+                    messages, context_chunks,
+                    "Gemini API key is not configured. Please add it in Settings → AI Provider."
+                )
             return await cls._call_gemini(
-                messages=augmented_messages,
+                messages=messages,
                 api_key=gemini_key,
                 model_name=model_name or settings.DEFAULT_GEMINI_MODEL,
                 temperature=temperature
             )
         elif provider in ["openai", "custom"]:
             if not effective_key and provider != "custom":
-                return cls._generate_offline_grounded_response(messages, context_chunks, "OpenAI API key is not configured. Please configure it in Settings.")
+                return cls._generate_offline_grounded_response(
+                    messages, context_chunks,
+                    "OpenAI API key is not configured. Please add it in Settings → AI Provider."
+                )
             return await cls._call_openai_compatible(
-                messages=augmented_messages,
+                messages=messages,
                 api_key=effective_key or "sk-no-key-required",
                 model_name=model_name or settings.DEFAULT_OPENAI_MODEL,
                 base_url=base_url or "https://api.openai.com/v1",
                 temperature=temperature
             )
         else:
-            return cls._generate_offline_grounded_response(messages, context_chunks, f"Provider '{provider}' not configured.")
+            return cls._generate_offline_grounded_response(
+                messages, context_chunks,
+                f"Provider '{provider}' is not recognised. Supported: openai, gemini, ollama, custom."
+            )
+
+    # ------------------------------------------------------------------ #
+    #  Private: Provider adapters                                         #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     async def _call_openai_compatible(
@@ -101,18 +233,36 @@ class AIProviderService:
             "temperature": temperature
         }
         try:
-            async with httpx.AsyncClient(timeout=45.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 res = await client.post(url, json=payload, headers=headers)
                 if res.status_code == 200:
                     data = res.json()
                     content = data["choices"][0]["message"]["content"]
                     return {"content": content, "status": "success", "provider": "openai_compatible"}
+                elif res.status_code in (401, 403):
+                    return {
+                        "content": f"⚠️ Invalid or unauthorised API key (HTTP {res.status_code}). "
+                                   "Please update your OpenAI key in Settings → AI Provider.",
+                        "status": "error",
+                        "provider": "openai_compatible",
+                        "http_status": res.status_code
+                    }
+                elif res.status_code == 429:
+                    return {
+                        "content": "⚠️ OpenAI rate limit reached. Please wait a moment and try again.",
+                        "status": "error",
+                        "provider": "openai_compatible",
+                        "http_status": 429
+                    }
                 else:
                     return {
-                        "content": f"⚠️ API Error ({res.status_code}): {res.text}",
+                        "content": f"⚠️ API Error ({res.status_code}): {res.text[:300]}",
                         "status": "error",
-                        "provider": "openai_compatible"
+                        "provider": "openai_compatible",
+                        "http_status": res.status_code
                     }
+        except httpx.TimeoutException:
+            return {"content": "⚠️ Request to OpenAI timed out. Please retry.", "status": "error"}
         except Exception as e:
             return {"content": f"⚠️ Connection failed to LLM endpoint: {str(e)}", "status": "error"}
 
@@ -125,7 +275,6 @@ class AIProviderService:
         temperature: float
     ) -> Dict[str, Any]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        # Convert messages to Gemini format
         gemini_contents = []
         for m in messages:
             role = "user" if m["role"] in ["user", "system"] else "model"
@@ -136,14 +285,36 @@ class AIProviderService:
             "generationConfig": {"temperature": temperature}
         }
         try:
-            async with httpx.AsyncClient(timeout=45.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
                     content = data["candidates"][0]["content"]["parts"][0]["text"]
                     return {"content": content, "status": "success", "provider": "gemini"}
+                elif res.status_code in (400, 401, 403):
+                    return {
+                        "content": f"⚠️ Invalid or unauthorised Gemini API key (HTTP {res.status_code}). "
+                                   "Please update your key in Settings → AI Provider.",
+                        "status": "error",
+                        "provider": "gemini",
+                        "http_status": res.status_code
+                    }
+                elif res.status_code == 429:
+                    return {
+                        "content": "⚠️ Gemini API rate limit reached. Please wait and retry.",
+                        "status": "error",
+                        "provider": "gemini",
+                        "http_status": 429
+                    }
                 else:
-                    return {"content": f"⚠️ Gemini API Error ({res.status_code}): {res.text}", "status": "error"}
+                    return {
+                        "content": f"⚠️ Gemini API Error ({res.status_code}): {res.text[:300]}",
+                        "status": "error",
+                        "provider": "gemini",
+                        "http_status": res.status_code
+                    }
+        except httpx.TimeoutException:
+            return {"content": "⚠️ Request to Gemini API timed out. Please retry.", "status": "error"}
         except Exception as e:
             return {"content": f"⚠️ Connection failed to Gemini API: {str(e)}", "status": "error"}
 
@@ -163,19 +334,30 @@ class AIProviderService:
             "stream": False
         }
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=90.0) as client:
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
                     content = data["message"]["content"]
                     return {"content": content, "status": "success", "provider": "ollama"}
                 else:
-                    return {"content": f"⚠️ Ollama error ({res.status_code}): {res.text}", "status": "error"}
+                    return {
+                        "content": f"⚠️ Ollama error ({res.status_code}): {res.text[:300]}",
+                        "status": "error",
+                        "provider": "ollama"
+                    }
         except Exception as e:
             return {
-                "content": f"⚠️ Local Ollama service is not running at {base_url}. Please start Ollama or configure an API key in Settings.",
+                "content": (
+                    f"⚠️ Local Ollama service is not running at {base_url}. "
+                    "Please start Ollama or configure an API key in Settings → AI Provider."
+                ),
                 "status": "error"
             }
+
+    # ------------------------------------------------------------------ #
+    #  Private: Offline fallback                                          #
+    # ------------------------------------------------------------------ #
 
     @classmethod
     def _generate_offline_grounded_response(
@@ -220,3 +402,41 @@ class AIProviderService:
             "status": "notice",
             "provider": "offline_extractor"
         }
+
+    # ------------------------------------------------------------------ #
+    #  Private: JSON parsing utility                                      #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _parse_json(text: str) -> Any:
+        """
+        Strips markdown fences and attempts to parse JSON.
+        Returns the parsed object or None on failure.
+        """
+        # Strip ```json ... ``` or ``` ... ``` fences
+        stripped = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped.strip())
+
+        # Try direct parse
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting the first JSON array
+        arr_match = re.search(r'\[\s*\{.*\}\s*\]', stripped, re.DOTALL)
+        if arr_match:
+            try:
+                return json.loads(arr_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # Try extracting the first JSON object
+        obj_match = re.search(r'\{.*\}', stripped, re.DOTALL)
+        if obj_match:
+            try:
+                return json.loads(obj_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        return None

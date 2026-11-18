@@ -1,5 +1,7 @@
 ---
-globs: ["frontend/**/*.{ts,tsx}"]
+trigger: glob
+globs: "frontend/**/*.ts, frontend/**/*.tsx"
+description: Next.js, TypeScript, and API sync rules for AMYGDALA frontend
 ---
 
 # Frontend Rules: Next.js App Router, TypeScript & Tailwind CSS

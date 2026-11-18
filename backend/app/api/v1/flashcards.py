@@ -105,11 +105,9 @@ async def generate_cards_from_doc(
     if not deck:
         raise HTTPException(status_code=404, detail="Deck not found")
 
-    chunks = RAGEngine.retrieve_relevant_chunks(
-        db=db,
-        query="definitions concepts key facts terminology formulas",
-        document_ids=[document_id],
-        top_k=count
+    # Use stratified chunks for comprehensive flashcard coverage across the full document
+    chunks = RAGEngine.get_stratified_chunks(
+        db=db, document_id=document_id, max_chunks=max(count * 2, 12)
     )
 
     ai_setting = db.query(AISetting).filter(
@@ -122,35 +120,34 @@ async def generate_cards_from_doc(
 
     prompt = (
         f"Extract exactly {count} high-yield study flashcards from the text below.\n"
-        f"Output strict JSON array: [ {{\"front\": \"Question or Concept\", \"back\": \"Clear concise answer/definition\", \"page\": 1}} ]\n\n"
-        f"TEXT:\n" + "\n\n".join([f"Page {c['page_number']}: {c['content']}" for c in chunks[:5]])
+        f"Each flashcard must reference the source page number.\n"
+        f"Output strict JSON array: [ {{\"front\": \"Question or Concept\", \"back\": \"Clear concise answer/definition\", \"page\": 1, \"document\": \"Document Title\"}} ]\n"
+        f"Output ONLY the JSON array. No markdown fences.\n\n"
+        f"TEXT:\n" + "\n\n".join([f"[Page {c['page_number']}] {c['content']}" for c in chunks])
     )
 
-    res = await AIProviderService.generate_chat_response(
-        messages=[{"role": "user", "content": prompt}],
-        context_chunks=chunks,
+    result = await AIProviderService.generate_structured_json(
+        prompt=prompt,
         provider=provider,
         api_key=api_key,
-        temperature=0.2
+        temperature=0.2,
+        context_chunks=chunks
     )
 
     created_cards = []
-    try:
-        content = res.get("content", "")
-        match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
-        cards_data = json.loads(match.group(0)) if match else json.loads(content)
-        for c in cards_data:
+    if result.get("status") == "success" and isinstance(result.get("data"), list):
+        for c in result["data"]:
             card = Flashcard(
                 deck_id=deck.id,
                 front=c.get("front", "Concept"),
                 back=c.get("back", "Definition"),
                 source_page=c.get("page", 1),
-                source_citation=f"Page {c.get('page', 1)}"
+                source_citation=f"{c.get('document', deck.title)} — Page {c.get('page', 1)}"
             )
             db.add(card)
             created_cards.append(card)
         db.commit()
-    except Exception:
+    else:
         # Fallback cards from chunks
         for idx, c in enumerate(chunks[:count]):
             first_sentence = c["content"].split(".")[0]

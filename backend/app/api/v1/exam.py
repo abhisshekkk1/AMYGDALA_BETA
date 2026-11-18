@@ -32,13 +32,19 @@ async def generate_mcqs(
     provider = ai_setting.provider if ai_setting else "openai"
     api_key = ai_setting.api_key if ai_setting else None
 
-    # Retrieve chunks for topic or document
-    chunks = RAGEngine.retrieve_relevant_chunks(
-        db=db,
-        query=req.topic or "concepts definitions principles examination summary",
-        document_ids=req.document_ids,
-        top_k=8
-    )
+    # Use stratified chunks when a single document is selected for full coverage;
+    # fall back to relevant-chunk retrieval when multiple documents or topic query is specified.
+    if len(req.document_ids) == 1 and not req.topic:
+        chunks = RAGEngine.get_stratified_chunks(
+            db=db, document_id=req.document_ids[0], max_chunks=16
+        )
+    else:
+        chunks = RAGEngine.retrieve_relevant_chunks(
+            db=db,
+            query=req.topic or "concepts definitions principles examination summary",
+            document_ids=req.document_ids,
+            top_k=10
+        )
 
     mcqs = await ExamEngine.generate_mcqs(
         context_chunks=chunks,
@@ -64,12 +70,17 @@ async def generate_marks_question(
     provider = ai_setting.provider if ai_setting else "openai"
     api_key = ai_setting.api_key if ai_setting else None
 
-    chunks = RAGEngine.retrieve_relevant_chunks(
-        db=db,
-        query=req.topic or "concept mechanism detailed explanation",
-        document_ids=req.document_ids,
-        top_k=6
-    )
+    if len(req.document_ids) == 1:
+        chunks = RAGEngine.get_stratified_chunks(
+            db=db, document_id=req.document_ids[0], max_chunks=16
+        )
+    else:
+        chunks = RAGEngine.retrieve_relevant_chunks(
+            db=db,
+            query=req.topic or "concept mechanism detailed explanation",
+            document_ids=req.document_ids,
+            top_k=10
+        )
 
     question_data = await ExamEngine.generate_marks_question(
         context_chunks=chunks,
@@ -95,12 +106,17 @@ async def generate_paper(
     provider = ai_setting.provider if ai_setting else "openai"
     api_key = ai_setting.api_key if ai_setting else None
 
-    chunks = RAGEngine.retrieve_relevant_chunks(
-        db=db,
-        query="examination syllabus questions chapters key concepts",
-        document_ids=req.document_ids,
-        top_k=10
-    )
+    if len(req.document_ids) == 1:
+        chunks = RAGEngine.get_stratified_chunks(
+            db=db, document_id=req.document_ids[0], max_chunks=16
+        )
+    else:
+        chunks = RAGEngine.retrieve_relevant_chunks(
+            db=db,
+            query="examination syllabus questions chapters key concepts",
+            document_ids=req.document_ids,
+            top_k=12
+        )
 
     paper = await ExamEngine.generate_full_question_paper(
         context_chunks=chunks,
@@ -138,6 +154,8 @@ async def create_practice_test(
 
     for idx, q in enumerate(req.questions):
         opts = q.get("options", [])
+        source_page = q.get("source_page", 1)
+        document_name = q.get("document_name", q.get("doc", "Document"))
         question_rec = TestQuestion(
             test_id=test.id,
             order_index=idx + 1,
@@ -148,8 +166,9 @@ async def create_practice_test(
             correct_answer=q.get("correct_answer", ""),
             explanation=q.get("explanation", ""),
             source_citation_json=json.dumps({
-                "page": q.get("source_page", 1),
-                "doc": q.get("document_name", "Document")
+                "page": source_page,
+                "doc": document_name,
+                "document_title": document_name
             })
         )
         db.add(question_rec)

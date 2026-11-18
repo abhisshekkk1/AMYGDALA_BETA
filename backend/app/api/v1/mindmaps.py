@@ -27,11 +27,9 @@ async def generate_mindmap(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    chunks = RAGEngine.retrieve_relevant_chunks(
-        db=db,
-        query="topics structure categories hierarchy key concepts",
-        document_ids=[req.document_id],
-        top_k=6
+    # Use stratified chunks for comprehensive topic coverage across full document
+    chunks = RAGEngine.get_stratified_chunks(
+        db=db, document_id=req.document_id, max_chunks=12
     )
 
     central_topic = req.central_topic or doc.title
@@ -46,37 +44,40 @@ async def generate_mindmap(
 
     prompt = (
         f"Generate a hierarchical mind map structure for '{central_topic}' based on the document text.\n"
+        f"Each node must include a 'source_page' field referencing the page number from the source material.\n"
         f"Output strict JSON with 'nodes' and 'edges':\n"
         f"{{\n"
         f"  \"nodes\": [\n"
-        f"    {{\"id\": \"root\", \"label\": \"{central_topic}\", \"level\": 0}},\n"
-        f"    {{\"id\": \"branch-1\", \"label\": \"Subtopic 1\", \"level\": 1, \"parentId\": \"root\"}},\n"
-        f"    {{\"id\": \"leaf-1\", \"label\": \"Key Concept A\", \"level\": 2, \"parentId\": \"branch-1\"}}\n"
+        f"    {{\"id\": \"root\", \"label\": \"{central_topic}\", \"level\": 0, \"source_page\": 1}},\n"
+        f"    {{\"id\": \"branch-1\", \"label\": \"Subtopic 1\", \"level\": 1, \"parentId\": \"root\", \"source_page\": 1}},\n"
+        f"    {{\"id\": \"leaf-1\", \"label\": \"Key Concept A\", \"level\": 2, \"parentId\": \"branch-1\", \"source_page\": 2}}\n"
         f"  ],\n"
         f"  \"edges\": [\n"
         f"    {{\"id\": \"e-root-b1\", \"source\": \"root\", \"target\": \"branch-1\"}},\n"
         f"    {{\"id\": \"e-b1-l1\", \"source\": \"branch-1\", \"target\": \"leaf-1\"}}\n"
         f"  ]\n"
         f"}}\n\n"
-        f"DOCUMENT TEXT:\n" + "\n\n".join([c["content"][:300] for c in chunks[:4]])
+        f"Output ONLY the JSON object. No markdown fences.\n\n"
+        f"DOCUMENT TEXT:\n" + "\n\n".join([f"[Page {c['page_number']}] {c['content'][:300]}" for c in chunks[:8]])
     )
 
-    res = await AIProviderService.generate_chat_response(
-        messages=[{"role": "user", "content": prompt}],
-        context_chunks=chunks,
+    result = await AIProviderService.generate_structured_json(
+        prompt=prompt,
         provider=provider,
         api_key=api_key,
-        temperature=0.2
+        temperature=0.2,
+        context_chunks=chunks
     )
 
     nodes = []
     edges = []
     try:
-        content = res.get("content", "")
-        match = re.search(r'\{\s*"nodes".*"edges".*\}', content, re.DOTALL)
-        data = json.loads(match.group(0)) if match else json.loads(content)
-        nodes = data.get("nodes", [])
-        edges = data.get("edges", [])
+        data = result.get("data") if result.get("status") == "success" else None
+        if isinstance(data, dict):
+            nodes = data.get("nodes", [])
+            edges = data.get("edges", [])
+        if not nodes:
+            raise ValueError("No nodes in result")
     except Exception:
         # Fallback hierarchical nodes
         nodes = [

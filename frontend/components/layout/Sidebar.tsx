@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BrainCircuit,
+  X,
 } from "lucide-react";
 
 interface NavItem {
@@ -24,6 +25,11 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   badge?: string;
+}
+
+interface SidebarProps {
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 const navItems: NavItem[] = [
@@ -39,53 +45,82 @@ const navItems: NavItem[] = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isMobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
-    <aside
-      className={`h-screen sticky top-0 border-r border-[#1f2937] bg-[#0b0f17] flex flex-col transition-all duration-300 z-40 ${
-        isCollapsed ? "w-20" : "w-64"
-      }`}
-    >
-      {/* Brand Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-[#1f2937]">
-        <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
-          <div className="h-10 w-10 min-w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <BrainCircuit className="h-5 w-5 text-white" />
-          </div>
-          {!isCollapsed && (
-            <div className="flex flex-col">
-              <span className="font-bold tracking-tight text-lg text-white font-mono">
-                AMYGDALA
-              </span>
-              <span className="text-[10px] text-indigo-400 font-medium tracking-wider uppercase">
-                AI Learning Platform
-              </span>
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          onClick={onCloseMobile}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 md:sticky md:top-0 h-screen border-r border-[#1f2937] bg-[#0b0f17] flex flex-col transition-all duration-300 ${
+          isCollapsed ? "w-20" : "w-64"
+        } ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        {/* Brand Header */}
+        <div className="h-16 flex items-center justify-between px-4 border-b border-[#1f2937]">
+          <Link
+            href="/dashboard"
+            onClick={() => onCloseMobile?.()}
+            className="flex items-center gap-3 overflow-hidden"
+          >
+            <div className="h-10 w-10 min-w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+              <BrainCircuit className="h-5 w-5 text-white" />
             </div>
-          )}
-        </Link>
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
-      </div>
+            {!isCollapsed && (
+              <div className="flex flex-col">
+                <span className="font-bold tracking-tight text-lg text-white font-mono">
+                  AMYGDALA
+                </span>
+                <span className="text-[10px] text-indigo-400 font-medium tracking-wider uppercase">
+                  AI Learning Platform
+                </span>
+              </div>
+            )}
+          </Link>
+          <div className="flex items-center gap-1">
+            {/* Close button on mobile */}
+            {onCloseMobile && (
+              <button
+                onClick={onCloseMobile}
+                className="md:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                title="Close Sidebar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {/* Desktop collapse toggle */}
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="hidden md:flex p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = item.icon;
+        {/* Navigation Links */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const Icon = item.icon;
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative ${
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => onCloseMobile?.()}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative ${
                 isActive
                   ? "bg-indigo-600/15 text-indigo-400 border border-indigo-500/30"
                   : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/60"
@@ -126,6 +161,7 @@ export function Sidebar() {
           <span className="font-mono text-[10px] text-gray-600">v1.0.0</span>
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   );
 }

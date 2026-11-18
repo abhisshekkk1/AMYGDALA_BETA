@@ -19,7 +19,8 @@ import {
   Loader2,
   ArrowRight,
   Award,
-  BookOpen
+  BookOpen,
+  Sparkles
 } from "lucide-react";
 import Link from "next/link";
 
@@ -394,56 +395,73 @@ function TestsContent() {
       </div>
 
       {/* Tests Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tests.map((test) => (
-          <div
-            key={test.id}
-            className="p-5 rounded-2xl bg-[#111827] border border-[#1f2937] hover:border-indigo-500/40 transition-all flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  {test.difficulty}
-                </span>
-                <span className="text-xs text-gray-400 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  <span>{test.duration_minutes} Mins</span>
-                </span>
+      {tests.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tests.map((test) => (
+            <div
+              key={test.id}
+              className="p-5 rounded-2xl bg-[#111827] border border-[#1f2937] hover:border-indigo-500/40 transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    {test.difficulty}
+                  </span>
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    <span>{test.duration_minutes} Mins</span>
+                  </span>
+                </div>
+
+                <h3 className="text-sm font-semibold text-white mt-3 line-clamp-1">
+                  {test.title}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  {test.questions?.length || 0} Questions • Total {test.total_marks} Marks
+                </p>
+
+                {test.status === "completed" && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-emerald-400">
+                      Score: {test.percentage}%
+                    </span>
+                    <span className="text-[10px] text-gray-500">Completed</span>
+                  </div>
+                )}
               </div>
 
-              <h3 className="text-sm font-semibold text-white mt-3 line-clamp-1">
-                {test.title}
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                {test.questions?.length || 0} Questions • Total {test.total_marks} Marks
-              </p>
-
-              {test.status === "completed" && (
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold text-emerald-400">
-                    Score: {test.percentage}%
-                  </span>
-                  <span className="text-[10px] text-gray-500">Completed</span>
-                </div>
-              )}
+              <div className="mt-5 pt-3 border-t border-gray-800">
+                <button
+                  onClick={() => handleStartTest(test)}
+                  className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                    test.status === "completed"
+                      ? "bg-gray-800 text-gray-200 hover:bg-gray-700"
+                      : "bg-indigo-600 hover:bg-indigo-500 text-white shadow"
+                  }`}
+                >
+                  <span>{test.status === "completed" ? "Review Assessment Answers" : "Start Timed Exam"}</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-
-            <div className="mt-5 pt-3 border-t border-gray-800">
-              <button
-                onClick={() => handleStartTest(test)}
-                className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                  test.status === "completed"
-                    ? "bg-gray-800 text-gray-200 hover:bg-gray-700"
-                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow"
-                }`}
-              >
-                <span>{test.status === "completed" ? "Review Assessment Answers" : "Start Timed Exam"}</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="p-16 text-center rounded-2xl bg-[#111827] border border-[#1f2937]">
+          <FileCheck2 className="h-10 w-10 text-indigo-400 mx-auto mb-3" />
+          <h2 className="text-base font-semibold text-white">No Practice Tests Created Yet</h2>
+          <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto mb-5">
+            Generate custom exam simulations, MCQs, and rubric-graded questions from your uploaded course materials.
+          </p>
+          <Link
+            href="/exam-prep"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white text-xs font-semibold shadow-lg shadow-indigo-500/20 transition-all"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Generate Practice Test</span>
+          </Link>
+        </div>
+      )}
 
       {/* Side-panel page viewer drawer */}
       <DocumentPageDrawer citation={activeCitation} onClose={() => setActiveCitation(null)} />

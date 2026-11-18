@@ -11,6 +11,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  RotateCcw,
   Download,
   Plus,
   Loader2,
@@ -157,10 +158,20 @@ export default function MindMapsPage() {
             </span>
             <button
               onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.1))}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
               title="Zoom Out"
             >
               <ZoomOut className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                setZoomLevel(1);
+                setCollapsedNodes({});
+              }}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+              title="Reset View & Expand All"
+            >
+              <RotateCcw className="h-4 w-4" />
             </button>
             <div className="w-[1px] h-4 bg-gray-800 mx-1" />
             <button

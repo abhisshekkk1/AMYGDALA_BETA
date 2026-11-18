@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/lib/auth-context";
@@ -13,6 +13,7 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading, login } = useAuth();
   const router = useRouter();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // For seamless local Windows development: auto-login demo student if not logged in
   useEffect(() => {
@@ -26,9 +27,12 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-[#0b0f17]">
-      <Sidebar />
+      <Sidebar
+        isMobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+      />
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar />
+        <Topbar onToggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)} />
         <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl w-full mx-auto">
           {children}
         </main>

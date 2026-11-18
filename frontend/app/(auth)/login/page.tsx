@@ -7,8 +7,8 @@ import { useAuth } from "@/lib/auth-context";
 import { BrainCircuit, ArrowRight, Lock, Mail, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("student@mentora.ai");
-  const [password, setPassword] = useState("mentora123");
+  const [email, setEmail] = useState("student@amygdala.ai");
+  const [password, setPassword] = useState("amygdala123");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
@@ -41,7 +41,7 @@ export default function LoginPage() {
             <BrainCircuit className="h-6 w-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white font-mono">
-            Welcome to MENTORA
+            Welcome to AMYGDALA
           </h1>
           <p className="text-sm text-gray-400 mt-1">
             Sign in to your AI-powered learning workspace
@@ -56,7 +56,7 @@ export default function LoginPage() {
 
         {/* Demo Account Callout */}
         <div className="mb-6 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-center justify-between">
-          <span>Demo Account Loaded: <strong>student@mentora.ai</strong></span>
+          <span>Demo Account Loaded: <strong>student@amygdala.ai</strong></span>
           <span className="font-mono text-[10px] bg-indigo-500/20 px-1.5 py-0.5 rounded">Ready</span>
         </div>
 

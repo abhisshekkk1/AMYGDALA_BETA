@@ -84,7 +84,7 @@ export function Topbar() {
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-52 rounded-xl bg-[#111827] border border-[#1f2937] shadow-2xl py-2 z-50">
               <div className="px-3 py-2 border-b border-gray-800 text-xs text-gray-400">
-                Signed in as <span className="font-semibold text-gray-200">{user?.email || "student@mentora.ai"}</span>
+                Signed in as <span className="font-semibold text-gray-200">{user?.email || "student@amygdala.ai"}</span>
               </div>
               <a
                 href="/settings"

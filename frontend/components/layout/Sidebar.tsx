@@ -58,7 +58,7 @@ export function Sidebar() {
           {!isCollapsed && (
             <div className="flex flex-col">
               <span className="font-bold tracking-tight text-lg text-white font-mono">
-                MENTORA
+                AMYGDALA
               </span>
               <span className="text-[10px] text-indigo-400 font-medium tracking-wider uppercase">
                 AI Learning Platform

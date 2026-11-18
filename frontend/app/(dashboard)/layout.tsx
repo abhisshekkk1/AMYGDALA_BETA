@@ -17,7 +17,7 @@ export default function DashboardLayout({
   // For seamless local Windows development: auto-login demo student if not logged in
   useEffect(() => {
     if (!isLoading && !user) {
-      login("student@mentora.ai", "mentora123").catch(() => {
+      login("student@amygdala.ai", "amygdala123").catch(() => {
         // demo login failed, route to login
         router.push("/login");
       });

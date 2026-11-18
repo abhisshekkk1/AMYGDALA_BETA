@@ -240,7 +240,7 @@ function AssistantContent() {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-white">
-                MENTORA AI Study Tutor
+                AMYGDALA AI Study Tutor
               </h2>
               <span className="text-[10px] text-gray-400">
                 Grounded in {selectedDocIds.length} document{selectedDocIds.length === 1 ? "" : "s"} with exact page citations

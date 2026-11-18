@@ -7,6 +7,11 @@ export interface User {
   is_active: boolean;
 }
 
+export interface UserProfileUpdate {
+  full_name?: string;
+  theme_preference?: "dark" | "light";
+}
+
 export interface AuthResponse {
   access_token: string;
   token_type: string;
@@ -50,6 +55,7 @@ export interface Citation {
   page_number: number;
   heading?: string;
   excerpt: string;
+  citation?: string;
   relevance_score?: number;
 }
 
@@ -84,6 +90,14 @@ export interface TestQuestion {
   is_correct?: boolean;
   marks_awarded?: number;
   is_marked_for_review: boolean;
+}
+
+export interface CreateTestFromMCQsRequest {
+  title: string;
+  questions: any[];
+  document_id?: number;
+  duration_minutes?: number;
+  difficulty?: string;
 }
 
 export interface PracticeTest {
@@ -151,6 +165,12 @@ export interface MindMap {
   updated_at: string;
 }
 
+export interface NoteGenerateRequest {
+  document_id: number;
+  note_type?: "summary" | "revision" | "definitions" | "formulas" | "custom";
+  title?: string;
+}
+
 export interface StudyNote {
   id: number;
   document_id?: number;
@@ -190,6 +210,6 @@ export interface AISettings {
   has_api_key: boolean;
   model_name: string;
   base_url?: string;
-  temperature: string;
+  temperature: number;
   is_active: boolean;
 }

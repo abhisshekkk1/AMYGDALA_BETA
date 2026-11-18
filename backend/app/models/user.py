@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -36,10 +36,9 @@ class AISetting(Base):
     api_key = Column(Text, nullable=True)  # user's key if configured
     model_name = Column(String(100), default="gpt-4o-mini")
     base_url = Column(String(255), nullable=True)
-    temperature = Column(String(10), default="0.3")
+    temperature = Column(Float, default=0.3)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="ai_settings")
-

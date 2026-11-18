@@ -11,6 +11,7 @@ class RAGEngine:
     Retrieval-Augmented Generation (RAG) engine.
     Computes vector representations, stores in document chunks, and retrieves
     the most relevant context chunks with page-number citations.
+    Supports stratified full-document chunking for summaries and study notes.
     """
 
     DIMENSION = 128
@@ -117,7 +118,55 @@ class RAGEngine:
                 "heading": chunk.heading or f"Page {chunk.page_number}",
                 "content": chunk.content,
                 "excerpt": excerpt,
+                "citation": f"[Page {chunk.page_number}]",
                 "relevance_score": round(score, 3)
             })
 
         return formatted_citations
+
+    @classmethod
+    def get_stratified_chunks(
+        cls,
+        db: Session,
+        document_id: int,
+        max_chunks: int = 16
+    ) -> List[Dict[str, Any]]:
+        """
+        Evenly samples up to max_chunks across the entire document (beginning, middle, end)
+        to enable comprehensive full-document synthesis without truncation bias.
+        """
+        doc = db.query(Document).filter(Document.id == document_id).first()
+        doc_title = doc.title if doc else "Document"
+
+        chunks = db.query(DocumentChunk).filter(
+            DocumentChunk.document_id == document_id
+        ).order_by(DocumentChunk.page_number, DocumentChunk.chunk_index).all()
+
+        if not chunks:
+            return []
+
+        total_chunks = len(chunks)
+        if total_chunks <= max_chunks:
+            selected_chunks = chunks
+        else:
+            # Sample evenly spaced chunk indices across the document
+            step = (total_chunks - 1) / (max_chunks - 1) if max_chunks > 1 else total_chunks
+            indices = sorted(list({int(round(i * step)) for i in range(max_chunks)}))
+            selected_chunks = [chunks[i] for i in indices if i < total_chunks]
+
+        formatted = []
+        for c in selected_chunks:
+            excerpt = c.content[:240].strip() + ("..." if len(c.content) > 240 else "")
+            formatted.append({
+                "chunk_id": c.id,
+                "document_id": c.document_id,
+                "document_title": doc_title,
+                "page_number": c.page_number,
+                "heading": c.heading or f"Page {c.page_number}",
+                "content": c.content,
+                "excerpt": excerpt,
+                "citation": f"[Page {c.page_number}]",
+                "relevance_score": 1.0
+            })
+
+        return formatted

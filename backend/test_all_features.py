@@ -12,29 +12,36 @@ client = TestClient(app)
 
 def run_tests():
     print("==================================================")
-    print("MENTORA END-TO-END AUTOMATED VERIFICATION SUITE")
+    print("AMYGDALA END-TO-END AUTOMATED VERIFICATION SUITE")
     print("==================================================")
 
     # 1. Health Check
     res = client.get("/api/health")
     assert res.status_code == 200, f"Health check failed: {res.text}"
-    print("✔ 1. Health Check Endpoint: OK (200)")
+    assert res.json()["service"] == "AMYGDALA Backend API"
+    print("✔ 1. Health Check Endpoint: OK (200, AMYGDALA Backend API)")
 
     # 2. Authentication Login
     login_res = client.post("/api/v1/auth/login", json={
-        "email": "student@mentora.ai",
-        "password": "mentora123"
+        "email": "student@amygdala.ai",
+        "password": "amygdala123"
     })
     assert login_res.status_code == 200, f"Login failed: {login_res.text}"
     token = login_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     print("✔ 2. User Authentication & JWT Issuance: OK (200)")
 
-    # 3. User Profile
+    # 3. User Profile & Typed Update
     me_res = client.get("/api/v1/auth/me", headers=headers)
     assert me_res.status_code == 200
-    assert me_res.json()["email"] == "student@mentora.ai"
-    print("✔ 3. User Profile Verification: OK (200)")
+    assert me_res.json()["email"] == "student@amygdala.ai"
+
+    update_profile_res = client.put("/api/v1/auth/me", headers=headers, json={
+        "full_name": "Alex Chen",
+        "theme_preference": "dark"
+    })
+    assert update_profile_res.status_code == 200
+    print("✔ 3. User Profile Verification & Pydantic v2 Update: OK (200)")
 
     # 4. Document Library
     docs_res = client.get("/api/v1/documents", headers=headers)
@@ -135,7 +142,7 @@ def run_tests():
     assert len(paper["sections"]) == 3
     print("✔ 9. Full Multi-Section Examination Paper Generator: OK (Sections A, B, C)")
 
-    # 10. Interactive Practice Test Creation & Submission
+    # 10. Interactive Practice Test Creation (Typed Pydantic Model) & Submission
     test_create_res = client.post(
         "/api/v1/exam/tests/create-from-mcqs",
         headers=headers,
@@ -143,7 +150,8 @@ def run_tests():
             "title": "Verification Practice Test",
             "questions": mcqs,
             "document_id": doc_id,
-            "duration_minutes": 15
+            "duration_minutes": 15,
+            "difficulty": "medium"
         }
     )
     assert test_create_res.status_code == 200
@@ -151,7 +159,7 @@ def run_tests():
     test_id = created_test["id"]
 
     # Submit answers
-    sample_answers = {q["id"]: q["options"][0] if q.get("options") else "A" for q in created_test["questions"]}
+    sample_answers = {str(q["id"]): q["options"][0] if q.get("options") else "A" for q in created_test["questions"]}
     submit_res = client.post(
         f"/api/v1/exam/tests/{test_id}/submit",
         headers=headers,
@@ -191,16 +199,16 @@ def run_tests():
     assert len(mm_data["nodes"]) > 0
     print(f"✔ 12. Hierarchical Mind Map Tree Generator: OK ({len(mm_data['nodes'])} nodes rendered)")
 
-    # 13. Study Notes & Summaries Generator
+    # 13. Study Notes & Stratified Full-Document Summaries (Typed Schema)
     note_res = client.post(
         "/api/v1/notes/generate",
         headers=headers,
-        json={"document_id": doc_id, "note_type": "summary"}
+        json={"document_id": doc_id, "note_type": "summary", "title": "Stratified Architecture Summary"}
     )
     assert note_res.status_code == 200
     note_data = note_res.json()
     assert len(note_data["content_markdown"]) > 0
-    print("✔ 13. Chapter Summary & Note Generation: OK")
+    print("✔ 13. Stratified Full-Document Summary & Notes Generation: OK")
 
     # 14. Learning Analytics & Recommendations
     analytics_res = client.get("/api/v1/analytics/dashboard", headers=headers)
@@ -210,17 +218,18 @@ def run_tests():
     assert analytics_data["summary"]["total_study_minutes"] > 0
     print("✔ 14. Real Learning Analytics & Engagement Trajectory: OK")
 
-    # 15. AI Settings Management
+    # 15. AI Settings Management (Float Temperature Verification)
     settings_res = client.put(
         "/api/v1/settings/ai",
         headers=headers,
-        json={"provider": "openai", "model_name": "gpt-4o-mini", "temperature": "0.3"}
+        json={"provider": "openai", "model_name": "gpt-4o-mini", "temperature": 0.3}
     )
     assert settings_res.status_code == 200
-    print("✔ 15. AI Provider Configuration Management: OK")
+    assert isinstance(settings_res.json()["temperature"], float)
+    print("✔ 15. AI Provider Configuration (Float Temperature): OK")
 
     print("==================================================")
-    print("ALL 15 ENTERPRISE SUBSYSTEMS VERIFIED AND OPERATIONAL!")
+    print("ALL 15 AMYGDALA SUBSYSTEMS FULLY OPERATIONAL!")
     print("==================================================")
 
 if __name__ == "__main__":

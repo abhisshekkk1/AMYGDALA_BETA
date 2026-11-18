@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState<string>("");
   const [modelName, setModelName] = useState<string>("gpt-4o-mini");
   const [baseUrl, setBaseUrl] = useState<string>("");
-  const [temperature, setTemperature] = useState<string>("0.3");
+  const [temperature, setTemperature] = useState<number>(0.3);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -41,7 +41,7 @@ export default function SettingsPage() {
         setProvider(data.provider);
         setModelName(data.model_name);
         setBaseUrl(data.base_url || "");
-        setTemperature(data.temperature || "0.3");
+        setTemperature(typeof data.temperature === "number" ? data.temperature : parseFloat(String(data.temperature)) || 0.3);
       })
       .catch((err) => console.error(err));
   }, []);
@@ -221,7 +221,7 @@ export default function SettingsPage() {
                 <Sliders className="h-3.5 w-3.5 text-indigo-400" />
                 <span>Temperature (Creativity vs Determinism)</span>
               </label>
-              <span className="text-xs font-mono text-indigo-400">{temperature}</span>
+              <span className="text-xs font-mono text-indigo-400">{temperature.toFixed(2)}</span>
             </div>
             <input
               type="range"
@@ -229,7 +229,7 @@ export default function SettingsPage() {
               max="1.0"
               step="0.05"
               value={temperature}
-              onChange={(e) => setTemperature(e.target.value)}
+              onChange={(e) => setTemperature(parseFloat(e.target.value))}
               className="w-full accent-indigo-500"
             />
             <div className="flex justify-between text-[10px] text-gray-500 mt-1">

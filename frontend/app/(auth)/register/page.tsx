@@ -43,7 +43,7 @@ export default function RegisterPage() {
             Create Your Account
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            Start mastering your syllabus with MENTORA
+            Start mastering your syllabus with AMYGDALA
           </p>
         </div>
 
@@ -114,7 +114,7 @@ export default function RegisterPage() {
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <span>Create MENTORA Account</span>
+                <span>Create AMYGDALA Account</span>
                 <ArrowRight className="h-4 w-4" />
               </>
             )}

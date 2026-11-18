@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -10,10 +10,9 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: "UserOut"
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    theme_preference: Optional[str] = None
 
 class UserOut(BaseModel):
     id: int
@@ -23,7 +22,9 @@ class UserOut(BaseModel):
     theme_preference: str = "dark"
     is_active: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-Token.model_rebuild()
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut

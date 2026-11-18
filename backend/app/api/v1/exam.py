@@ -10,7 +10,7 @@ from app.models.exam import PracticeTest, TestQuestion
 from app.models.mindmap import ActivityLog
 from app.schemas.exam import (
     MCQGenerateRequest, MarksQuestionRequest, PaperGenerateRequest,
-    SubmitTestRequest, PracticeTestOut, TestQuestionOut
+    CreateTestFromMCQsRequest, SubmitTestRequest, PracticeTestOut, TestQuestionOut
 )
 from app.api.deps import get_current_user
 from app.services.rag_engine import RAGEngine
@@ -116,32 +116,27 @@ async def generate_paper(
 
 @router.post("/tests/create-from-mcqs", response_model=PracticeTestOut)
 async def create_practice_test(
-    data: dict,
+    req: CreateTestFromMCQsRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Creates an interactive test session from generated MCQs.
+    Creates an interactive test session from generated MCQs using typed request schema.
     """
-    questions_list = data.get("questions", [])
-    title = data.get("title", "Practice Assessment")
-    duration = data.get("duration_minutes", 20)
-    doc_id = data.get("document_id")
-
     test = PracticeTest(
         user_id=current_user.id,
-        document_id=doc_id,
-        title=title,
-        difficulty=data.get("difficulty", "medium"),
-        duration_minutes=duration,
-        total_marks=len(questions_list),
+        document_id=req.document_id,
+        title=req.title,
+        difficulty=req.difficulty,
+        duration_minutes=req.duration_minutes,
+        total_marks=len(req.questions),
         status="in_progress"
     )
     db.add(test)
     db.commit()
     db.refresh(test)
 
-    for idx, q in enumerate(questions_list):
+    for idx, q in enumerate(req.questions):
         opts = q.get("options", [])
         question_rec = TestQuestion(
             test_id=test.id,
@@ -205,11 +200,10 @@ def submit_practice_test(
     total_q = len(test.questions)
 
     for q in test.questions:
-        user_ans = req.answers.get(q.id) or req.answers.get(str(q.id))
+        user_ans = req.answers.get(str(q.id)) or req.answers.get(q.id)  # type: ignore
         q.user_answer = user_ans
 
         if user_ans and q.correct_answer:
-            # Check correctness (prefix letter match or exact text)
             ua_clean = user_ans.strip().lower()
             ca_clean = q.correct_answer.strip().lower()
             

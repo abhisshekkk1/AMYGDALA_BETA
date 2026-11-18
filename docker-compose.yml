@@ -3,18 +3,18 @@ version: "3.9"
 services:
   db:
     image: pgvector/pgvector:pg16
-    container_name: mentora-postgres
+    container_name: amygdala-postgres
     restart: always
     environment:
-      POSTGRES_USER: mentora_user
-      POSTGRES_PASSWORD: mentora_secure_password_2025
-      POSTGRES_DB: mentora_db
+      POSTGRES_USER: amygdala_user
+      POSTGRES_PASSWORD: amygdala_secure_password_2025
+      POSTGRES_DB: amygdala_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mentora_user -d mentora_db"]
+      test: ["CMD-SHELL", "pg_isready -U amygdala_user -d amygdala_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,14 +23,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: mentora-backend
+    container_name: amygdala-backend
     restart: always
     depends_on:
       db:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://mentora_user:mentora_secure_password_2025@db:5432/mentora_db
-      - SECRET_KEY=mentora-super-secret-key-change-in-production-2025
+      - DATABASE_URL=postgresql://amygdala_user:amygdala_secure_password_2025@db:5432/amygdala_db
+      - SECRET_KEY=amygdala-super-secret-key-change-in-production-2025
       - ALGORITHM=HS256
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -43,7 +43,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: mentora-frontend
+    container_name: amygdala-frontend
     restart: always
     depends_on:
       - backend

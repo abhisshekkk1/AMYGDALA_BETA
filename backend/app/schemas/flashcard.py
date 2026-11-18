@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class FlashcardDeckCreate(BaseModel):
     title: str
@@ -31,8 +31,7 @@ class FlashcardOut(BaseModel):
     last_reviewed_at: Optional[datetime] = None
     last_rating: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FlashcardDeckOut(BaseModel):
     id: int
@@ -44,5 +43,4 @@ class FlashcardDeckOut(BaseModel):
     updated_at: datetime
     cards: List[FlashcardOut] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,6 @@
-# MENTORA: AI-Powered Learning, Knowledge Management & Exam Preparation Platform
+# AMYGDALA: AI-Powered Learning, Knowledge Management & Exam Preparation Platform
 
-MENTORA is a production-quality, enterprise-grade AI learning platform designed to transform textbooks, lecture notes, presentations, and syllabus materials into source-grounded learning experiences:
+AMYGDALA is a production-quality, enterprise-grade AI learning platform designed to transform textbooks, lecture notes, presentations, and syllabus materials into source-grounded learning experiences:
 - **Verified AI Study Assistant** with exact document and page number citations.
 - **AI Examination Preparation** with tiered Multiple Choice Questions (Easy, Medium, Hard), marks-adapted short/long answers (2, 3, 5, 10, 15 marks), and complete question papers with printable answer keys.
 - **Interactive Practice Test Engine** with timed countdowns, question navigation palettes, and autosave.
@@ -70,8 +70,8 @@ Client application will be live at: [http://localhost:3000](http://localhost:300
 
 The platform automatically seeds a rich demonstration student account on initial launch with pre-indexed academic materials:
 
-- **Email**: `student@mentora.ai`
-- **Password**: `mentora123`
+- **Email**: `student@amygdala.ai`
+- **Password**: `amygdala123`
 
 You can also register any new student account directly from the login page.
 
@@ -79,8 +79,8 @@ You can also register any new student account directly from the login page.
 
 ## AI Provider Configuration
 
-MENTORA features a **provider-independent AI integration layer**:
-1. **Offline Grounded Mode (Default)**: If no external LLM key is configured, MENTORA performs local RAG extraction, retrieving and displaying exact page excerpts from uploaded documents without requiring external paid services.
+AMYGDALA features a **provider-independent AI integration layer**:
+1. **Offline Grounded Mode (Default)**: If no external LLM key is configured, AMYGDALA performs local RAG extraction, retrieving and displaying exact page excerpts from uploaded documents without requiring external paid services.
 2. **OpenAI**: Connect your `OPENAI_API_KEY` (e.g., `gpt-4o-mini`, `gpt-4o`).
 3. **Google Gemini**: Connect your `GEMINI_API_KEY` (e.g., `gemini-1.5-flash`, `gemini-1.5-pro`).
 4. **Local Ollama**: Run completely private local models (`llama3:latest`, `mistral`) at `http://localhost:11434`.

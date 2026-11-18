@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class ChatMessageCreate(BaseModel):
     session_id: Optional[int] = None
@@ -24,8 +24,7 @@ class ChatMessageOut(BaseModel):
     citations: List[CitationItem] = []
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatSessionOut(BaseModel):
     id: int
@@ -35,5 +34,4 @@ class ChatSessionOut(BaseModel):
     updated_at: datetime
     messages: List[ChatMessageOut] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,27 +1,34 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 
 class MCQGenerateRequest(BaseModel):
     document_ids: List[int]
     topic: Optional[str] = None
-    num_questions: int = 5
+    num_questions: int = Field(default=5, ge=1, le=25)
     difficulty: str = "medium"  # easy, medium, hard
 
 class MarksQuestionRequest(BaseModel):
     document_ids: List[int]
-    marks: int = 5  # 2, 3, 5, 10, 15
+    marks: int = Field(default=5, ge=1, le=30)  # 2, 3, 5, 10, 15
     topic: Optional[str] = None
 
 class PaperGenerateRequest(BaseModel):
     document_ids: List[int]
     title: str = "Midterm Examination"
     subject: str = "General Studies"
-    total_marks: int = 50
-    duration_minutes: int = 60
+    total_marks: int = Field(default=50, ge=10, le=200)
+    duration_minutes: int = Field(default=60, ge=5, le=360)
+
+class CreateTestFromMCQsRequest(BaseModel):
+    title: str = "Practice Assessment"
+    questions: List[Dict[str, Any]] = []
+    document_id: Optional[int] = None
+    duration_minutes: int = Field(default=20, ge=1, le=300)
+    difficulty: str = "medium"
 
 class SubmitTestRequest(BaseModel):
-    answers: Dict[int, str]  # question_id -> user answer string
+    answers: Dict[str, str] = {}  # question_id (as str or int key) -> answer string
 
 class TestQuestionOut(BaseModel):
     id: int
@@ -38,8 +45,7 @@ class TestQuestionOut(BaseModel):
     marks_awarded: Optional[float] = None
     is_marked_for_review: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PracticeTestOut(BaseModel):
     id: int
@@ -55,5 +61,4 @@ class PracticeTestOut(BaseModel):
     created_at: datetime
     questions: List[TestQuestionOut] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

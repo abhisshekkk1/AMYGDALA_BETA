@@ -6,7 +6,7 @@ import { AuthProvider } from "@/lib/auth-context";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "MENTORA — AI-Powered Learning & Exam Preparation Platform",
+  title: "AMYGDALA — AI-Powered Learning & Exam Preparation Platform",
   description: "Transform documents and study materials into interactive learning experiences, verifiable RAG tutoring, spaced-repetition flashcards, and exam preparation.",
 };
 

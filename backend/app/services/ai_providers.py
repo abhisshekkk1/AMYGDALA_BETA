@@ -31,7 +31,7 @@ class AIProviderService:
                 for c in context_chunks
             ])
             system_grounding = (
-                "You are MENTORA, an elite academic AI tutor. "
+                "You are AMYGDALA, an elite academic AI tutor. "
                 "You MUST answer the student's question based strictly on the provided SOURCE DOCUMENTS below. "
                 "Include clear citations in format [Document Name, Page X]. "
                 "If the answer cannot be determined from the source materials, explicitly state: "
@@ -40,7 +40,7 @@ class AIProviderService:
             )
         else:
             system_grounding = (
-                "You are MENTORA, an elite academic AI tutor. "
+                "You are AMYGDALA, an elite academic AI tutor. "
                 "No specific document context was retrieved. Answer politely and indicate that "
                 "uploading or selecting a relevant study document will provide source-grounded answers."
             )

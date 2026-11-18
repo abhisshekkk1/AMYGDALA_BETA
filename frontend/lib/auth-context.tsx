@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Check saved theme
-    const savedTheme = localStorage.getItem("mentora_theme") as "dark" | "light" | null;
+    const savedTheme = localStorage.getItem("amygdala_theme") as "dark" | "light" | null;
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle("light", savedTheme === "light");
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Check saved token
-    const savedToken = localStorage.getItem("mentora_token");
+    const savedToken = localStorage.getItem("amygdala_token");
     if (savedToken) {
       setToken(savedToken);
       api.getMe()
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(userData);
         })
         .catch(() => {
-          localStorage.removeItem("mentora_token");
+          localStorage.removeItem("amygdala_token");
           setToken(null);
           setUser(null);
         })
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const res = await api.login(email, password);
-      localStorage.setItem("mentora_token", res.access_token);
+      localStorage.setItem("amygdala_token", res.access_token);
       setToken(res.access_token);
       setUser(res.user);
     } finally {
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const res = await api.register(email, password, fullName);
-      localStorage.setItem("mentora_token", res.access_token);
+      localStorage.setItem("amygdala_token", res.access_token);
       setToken(res.access_token);
       setUser(res.user);
     } finally {
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("mentora_token");
+    localStorage.removeItem("amygdala_token");
     setToken(null);
     setUser(null);
   };
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
-    localStorage.setItem("mentora_theme", newTheme);
+    localStorage.setItem("amygdala_theme", newTheme);
     document.documentElement.classList.toggle("light", newTheme === "light");
   };
 

@@ -27,7 +27,7 @@ def get_ai_settings(
     provider = setting.provider if setting else "openai"
     model = setting.model_name if setting else "gpt-4o-mini"
     base_url = setting.base_url if setting else None
-    temp = setting.temperature if setting else "0.3"
+    temp = float(setting.temperature) if setting and setting.temperature is not None else 0.3
 
     return {
         "provider": provider,
@@ -54,14 +54,13 @@ def update_ai_settings(
 
     setting.provider = update_data.provider
     if update_data.api_key:
-        # Update user's API key (stored securely in DB)
         setting.api_key = update_data.api_key
     if update_data.model_name:
         setting.model_name = update_data.model_name
     if update_data.base_url is not None:
         setting.base_url = update_data.base_url
-    if update_data.temperature:
-        setting.temperature = update_data.temperature
+    if update_data.temperature is not None:
+        setting.temperature = float(update_data.temperature)
 
     setting.is_active = True
     db.commit()
@@ -72,6 +71,6 @@ def update_ai_settings(
         "has_api_key": bool(setting.api_key) or bool(os.getenv("OPENAI_API_KEY")),
         "model_name": setting.model_name,
         "base_url": setting.base_url,
-        "temperature": setting.temperature,
+        "temperature": float(setting.temperature),
         "is_active": setting.is_active
     }

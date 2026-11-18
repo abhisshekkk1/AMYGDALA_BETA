@@ -23,11 +23,11 @@ def init_seed_data():
     db = SessionLocal()
     try:
         # Check if default demo student exists
-        demo_user = db.query(User).filter(User.email == "student@mentora.ai").first()
+        demo_user = db.query(User).filter(User.email == "student@amygdala.ai").first()
         if not demo_user:
             demo_user = User(
-                email="student@mentora.ai",
-                hashed_password=get_password_hash("mentora123"),
+                email="student@amygdala.ai",
+                hashed_password=get_password_hash("amygdala123"),
                 full_name="Alex Chen",
                 theme_preference="dark"
             )
@@ -40,7 +40,7 @@ def init_seed_data():
                 user_id=demo_user.id,
                 provider="openai",
                 model_name="gpt-4o-mini",
-                temperature="0.3"
+                temperature=0.3
             )
             db.add(ai_set)
 
@@ -234,6 +234,6 @@ app.include_router(settings_api.router, prefix="/api/v1/settings", tags=["Settin
 def health_check():
     return {
         "status": "healthy",
-        "service": "MENTORA Backend API",
+        "service": "AMYGDALA Backend API",
         "version": settings.VERSION
     }

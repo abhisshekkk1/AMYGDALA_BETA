@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.models.user import User, AISetting
-from app.schemas.auth import UserRegister, UserLogin, Token, UserOut
+from app.schemas.auth import UserRegister, UserLogin, UserProfileUpdate, Token, UserOut
 from app.api.deps import get_current_user
 
 router = APIRouter()
@@ -32,7 +32,7 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
         user_id=user.id,
         provider="openai",
         model_name="gpt-4o-mini",
-        temperature="0.3"
+        temperature=0.3
     )
     db.add(default_ai)
     db.commit()
@@ -66,14 +66,14 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.put("/me", response_model=UserOut)
 def update_profile(
-    updates: dict,
+    updates: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if "full_name" in updates:
-        current_user.full_name = updates["full_name"]
-    if "theme_preference" in updates and updates["theme_preference"] in ["dark", "light"]:
-        current_user.theme_preference = updates["theme_preference"]
+    if updates.full_name is not None:
+        current_user.full_name = updates.full_name
+    if updates.theme_preference is not None and updates.theme_preference in ["dark", "light"]:
+        current_user.theme_preference = updates.theme_preference
     
     db.commit()
     db.refresh(current_user)
